@@ -1,0 +1,142 @@
+name: Watchman-Linus
+ 
+on:
+  push:
+    branches:  [ "main", "experimental**" ]
+  pull_request:
+    branches: [ "main", "release" ]
+
+jobs:
+  watching:
+    name: Get Changed Pipelines
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.spotting.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+
+      - name: Folders changed 4 levels deep
+        id: spotting
+        env: 
+          IS_PR: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+        run: |
+          # Find changed folders 4 levels deep
+          # see .github/specs/folders_changed.spec.sh
+
+          if $IS_PR
+          then
+            branch=${{ github.base_ref }}
+            start=HEAD^1
+            stop=HEAD
+          else
+            branch=${{ github.ref_name }} 
+            start=${{ github.event.before }} 
+            stop=${{ github.event.after }} 
+          fi
+
+          changed="$(git diff --name-only -r $start $stop | sed -rn 's#^([^/]+/[^/]+/[^/]+/[^/]+)/.*#\1#p' | sort -u | xargs)"
+
+          function find_var () # search for a named variable value from any number of .env files or use default
+          {
+            local name="$1" ; shift 2
+            local default="$1" ; shift 2
+            local env_file value
+            
+            for env_file in "$@"
+            do
+              value="$(sed -n "/^$name=/ { s/^$name=//; p ; q }" "$env_file" | xargs)"
+              [[ -n "$value" ]] && echo "$value" && return 0
+            done
+
+            echo "$default"
+          }
+
+          # matrix [ { "pipeline": "<type>/<a>/<b>/<c>", 
+                       "runner"  : "$runner", "config": "dry-run.env", "branch": "main" } ... ]
+
+          matrix=$(for PIPELINE in $changed
+          do
+            branch_config="$(find_var BRANCH_CONFIG default: "${branch%%/*}.branch.env")"
+            config="$(find_var CONFIG default: 'default.env' \
+                                      search: $PIPELINE/.env           $PIPELINE/config/.env \
+                                              $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
+                                              config/$branch_config)"
+            runner="$(find_var RUNNER default: 'none' \
+                                      search:  $PIPELINE/.env           $PIPELINE/config/.env \
+                                               $PIPELINE/$config        $PIPELINE/config/$config \
+                                               $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
+                                               config/$branch_config)"
+          done | jq -s .)
+
+          echo "matrix=$matrix" | tee -a $GITHUB_OUTPUT
+
+  pipeline:
+    needs: watching
+    strategy:
+      matrix: ${{ fromJson(needs.watching.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: initialize
+        env:
+          BRANCH: ${{ matrix.branch }}
+          CONFIG: ${{ matrix.config }}
+          PIPELINE: ${{ matrix.pipeline }}
+        run: |
+          # Initialize Environment
+
+          cat <<"VARS" | tee -a $GITHUB_ENV
+          BRANCH=$BRANCH
+          BRANCH_CONFIG=${BRANCH%%/*}.branch.env
+          CONFIG=$CONFIG
+          PIPELINE=$PIPELINE
+          files="$(ls $PIPELINE || echo '')"
+          VARS
+          
+          function read_vars ()
+          {
+            echo "Reading $@" ; shift
+            for cfg in "$@"
+            do
+              [[ ! -f "$cfg" ]] && return 0
+              echo " $cfg"
+              while IFS='=' read -r key value
+              do
+                if [[ "$key" != '#'* && -n "$key" ]]
+                then
+                  echo "$key=$value" >> $GITHUB_ENV
+                fi 
+              done < "$cfg"
+            done
+          }
+        
+          read_vars 'Global:   ' "config/$BRANCH_CONFIG"           "config/$CONFIG"
+          read_vars 'Project:  ' "$PIPELINE/config/$CONFIG"        "$PIPELINE/$CONFIG"
+          read_vars 'Branch:   ' "$PIPELINE/config/$BRANCH_CONFIG" "$PIPELINE/$BRANCH_CONFIG"
+          read_vars 'Overides: ' "$PIPELINE/config/.env"           "$PIPELINE/.env"
+
+      - name: Inherit base Project
+        if env.INHERITS != ''
+        run: |
+          # Copy inherited pipeline
+          if [ -d "$INHERITS" ]
+          then
+            cp -rvn $INHERITS/. $PIPELINE
+          else
+            echo "Pipeline folder ($INHERITS) set by INHERITS does not exist"
+          fi
+      
+      - name: Login to registry
+        id: source-registry
+        env:
+          prefix: 'PULL_'
+        run: |
+          bash $REGISTRY_LOGIN_SCRIPT 
+        
