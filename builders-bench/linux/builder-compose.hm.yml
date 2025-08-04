@@ -1,0 +1,18 @@
+name: Builder-Compose
+on:
+  workflow_dispatch:
+    inputs:
+      pipeline:
+        required: true
+      ref:
+        required: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - run: |
+          set -euo pipefail
+          docker compose -f "${{ inputs.pipeline }}/docker-compose.yml" build

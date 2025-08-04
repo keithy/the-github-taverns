@@ -1,0 +1,25 @@
+name: Builder-Mise
+on:
+  workflow_dispatch:
+    inputs:
+      pipeline:
+        required: true
+      ref:
+        required: true
+      task:
+        required: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - run: |
+          set -euo pipefail
+          task="${{ inputs.task }}"
+          if [[ -n "$task" ]]; then
+            mise run -C "${{ inputs.pipeline }}" "$task"
+          else
+            mise run -C "${{ inputs.pipeline }}" build
+          fi
