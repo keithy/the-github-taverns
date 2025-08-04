@@ -21,6 +21,15 @@ jobs:
       - name: Import env
         run: |
           echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+          builder_name="${GITHUB_WORKFLOW%.hm.yml}"
+          {
+            echo "BUILDER=$builder_name"
+            echo "TECH=${builder_name#*-}"
+          } >> "$GITHUB_ENV"
+      - name: Pre-build hooks
+        run: |
+          set -euo pipefail
+          find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
       - name: dotnet restore
         run: |
           set -euo pipefail
@@ -42,14 +51,7 @@ jobs:
       - name: Post-build hooks
         run: |
           set -euo pipefail
-          for dir in ".github/hooks/post-build.d" "${{ inputs.pipeline }}/hooks/post-build.d"; do
-            if [[ -d "$dir" ]]; then
-              for f in "$dir"/*; do
-                [[ -f "$f" && -x "$f" ]] || continue
-                "$f"
-              done
-            fi
-          done
+          find hooks/post-build.d hooks/${TECH}/post-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
       - name: Prepare payload
         run: |
           set -euo pipefail
