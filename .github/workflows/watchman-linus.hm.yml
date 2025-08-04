@@ -133,10 +133,22 @@ jobs:
             echo "Pipeline folder ($INHERITS) set by INHERITS does not exist"
           fi
       
-      - name: Login to registry
-        id: source-registry
-        env:
-          prefix: 'PULL_'
+      - name: Pre-build hooks
+        id: pre-build-hooks
         run: |
-          bash $REGISTRY_LOGIN_SCRIPT 
+          set -euo pipefail
+          for dir in \
+            ".github/hooks/pre-build.d" \
+            "$PIPELINE/hooks/pre-build.d"
+          do
+            if [[ -d "$dir" ]]; then
+              for f in "$dir"/*; do
+                [[ -f "$f" && -x "$f" ]] || continue
+                echo "running: $f"
+                "$f"
+              done
+            else
+              echo "no pre-build hooks found at $dir"
+            fi
+          done
         
