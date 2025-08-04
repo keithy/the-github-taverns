@@ -1,4 +1,4 @@
-name: Builder-Maven
+name: Builder-Gradle
 on:
   workflow_dispatch:
     inputs:
@@ -20,6 +20,10 @@ jobs:
       - name: Import env
         run: |
           echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
-      - run: |
+      - name: Gradle build
+        run: |
           set -euo pipefail
-          mvn -f "${{ inputs.pipeline }}/pom.xml" -B -U -ntp package
+          pushd "${{ inputs.pipeline }}" >/dev/null
+          chmod +x ./gradlew || true
+          if [[ -x ./gradlew ]]; then ./gradlew build --no-daemon; else gradle build --no-daemon; fi
+          popd >/dev/null

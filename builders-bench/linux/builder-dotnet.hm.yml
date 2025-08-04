@@ -8,6 +8,8 @@ on:
         required: true
       runner:
         required: false
+      env:
+        required: false
 jobs:
   build:
     runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
@@ -15,6 +17,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+      - name: Import env
+        run: |
+          echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
       - run: |
           set -euo pipefail
           pushd "${{ inputs.pipeline }}" >/dev/null
