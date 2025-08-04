@@ -1,0 +1,138 @@
+name: Watchman-Sam
+
+on:
+  push:
+    branches: [ "main", "experimental**" ]
+  pull_request:
+    branches: [ "main", "release" ]
+
+jobs:
+  watching:
+    name: Get Changed Pipelines
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.spotting.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+
+      - name: Folders changed 4 levels deep
+        id: spotting
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+        run: |
+          if $IS_PR; then
+            branch=${{ github.base_ref }}
+            start=HEAD^1
+            stop=HEAD
+          else
+            branch=${{ github.ref_name }}
+            start=${{ github.event.before }}
+            stop=${{ github.event.after }}
+          fi
+
+          changed="$(git diff --name-only -r $start $stop | sed -rn 's#^([^/]+/[^/]+/[^/]+/[^/]+)/.*#\1#p' | sort -u | xargs)"
+
+          find_var() { local name="$1"; shift 2; local def="$1"; shift 2; local f v; for f in "$@"; do v="$(sed -n "/^$name=/ { s/^$name=//; p ; q }" "$f" | xargs)"; [[ -n "$v" ]] && echo "$v" && return 0; done; echo "$def"; }
+
+          matrix=$(for PIPELINE in $changed; do
+            branch_config="$(find_var BRANCH_CONFIG default: "${branch%%/*}.branch.env")"
+            config="$(find_var CONFIG default: 'default.env' \
+                                   search: $PIPELINE/.env           $PIPELINE/config/.env \
+                                           $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
+                                           config/$branch_config)"
+            runner="$(find_var RUNNER default: 'ubuntu-24.04' \
+                                   search:  $PIPELINE/.env           $PIPELINE/config/.env \
+                                            $PIPELINE/$config        $PIPELINE/config/$config \
+                                            $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
+                                            config/$branch_config)"
+            echo "{\"pipeline\": \"$PIPELINE\", \"runner\": \"$runner\", \"config\": \"$config\", \"branch\": \"$branch\" }"
+          done | jq -s .)
+
+          echo "matrix=$matrix" | tee -a $GITHUB_OUTPUT
+
+  dispatch:
+    needs: watching
+    strategy:
+      matrix: ${{ fromJson(needs.watching.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: initialize
+        env:
+          BRANCH: ${{ github.ref_name }}
+          PIPELINE: ${{ matrix.pipeline }}
+        run: |
+          cat <<"VARS" | tee -a $GITHUB_ENV
+          BRANCH=$BRANCH
+          BRANCH_CONFIG=${BRANCH%%/*}.branch.env
+          PIPELINE=$PIPELINE
+          files="$(ls $PIPELINE || echo '')"
+          VARS
+
+      - name: Pre-build hooks
+        run: |
+          set -euo pipefail
+          for dir in \
+            ".github/hooks/pre-build.d" \
+            "$PIPELINE/hooks/pre-build.d"; do
+            if [[ -d "$dir" ]]; then
+              for f in "$dir"/*; do
+                [[ -f "$f" && -x "$f" ]] || continue
+                "$f"
+              done
+            fi
+          done
+
+
+      - name: Prepare env payload
+        id: prepare
+        run: |
+          set -euo pipefail
+          jq -Rs 'split("\n")|map(select(length>0))|map(split("="))|map({(.[0]):.[1]})|add' < "$GITHUB_ENV" > env.json
+          echo "ENV_JSON=$(cat env.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch per-tech builders
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ref="${{ github.sha }}"
+          runner="${{ matrix.runner }}"
+          env_json='${{ steps.prepare.outputs.ENV_JSON }}'
+
+          run_builder() {
+            local wf="$1"; shift
+            gh workflow run "$wf" -f pipeline="$PIPELINE" -f ref="$ref" -f runner="$runner" -f env="$env_json"
+          }
+
+          if [[ "$files" == *"Dockerfile"* ]]; then
+            run_builder "builders-bench/linux/builder-docker.hm.yml"
+          fi
+          if [[ "$files" == *"Containerfile"* ]]; then
+            run_builder "builders-bench/linux/builder-buildah.hm.yml"
+          fi
+          if [[ "$files" == *"pom.xml"* ]]; then
+            run_builder "builders-bench/linux/builder-maven.hm.yml"
+          fi
+          if [[ "$files" == *"package.json"* ]]; then
+            run_builder "builders-bench/linux/builder-node.hm.yml"
+          fi
+          if [[ "$files" == *"configure"* ]]; then
+            run_builder "builders-bench/linux/builder-configure-make.hm.yml"
+          fi
+          if [[ "$files" == *"docker-compose.yml"* ]]; then
+            run_builder "builders-bench/linux/builder-compose.hm.yml"
+          fi
+          if [[ "$files" == *"mise.toml"* ]]; then
+            run_builder "builders-bench/linux/builder-mise.hm.yml"
+          fi
+          if echo "$files" | grep -E -q '\.csproj|global.json|NuGet.config'; then
+            run_builder "builders-bench/linux/builder-dotnet.hm.yml"
+          fi

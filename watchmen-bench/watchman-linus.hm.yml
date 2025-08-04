@@ -68,6 +68,7 @@ jobs:
                                                $PIPELINE/$config        $PIPELINE/config/$config \
                                                $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
                                                config/$branch_config)"
+            echo "{\"pipeline\": \"$PIPELINE\", \"runner\": \"$runner\", \"config\": \"$config\", \"branch\": \"$branch\" }"
           done | jq -s .)
 
           echo "matrix=$matrix" | tee -a $GITHUB_OUTPUT
@@ -151,4 +152,73 @@ jobs:
               echo "no pre-build hooks found at $dir"
             fi
           done
+        
+      - name: Build Dockerfile (docker)
+        if: contains(env.files, 'Dockerfile')
+        run: |
+          set -euo pipefail
+          IMAGE_TAG="${IMAGE_TAG:-${BRANCH##*/}}"
+          REGISTRY="${REGISTRY:-}"
+          IMAGE_PATH="${IMAGE_PATH:-$(basename "$(dirname "$PIPELINE")")/$(basename "$PIPELINE")}"
+          ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
+          echo "Building $ref from $PIPELINE/Dockerfile"
+          docker build -t "$ref" "$PIPELINE"
+          echo "IMAGE_REF=$ref" >> "$GITHUB_ENV"
+
+      - name: Build Containerfile (buildah)
+        if: contains(env.files, 'Containerfile')
+        run: |
+          set -euo pipefail
+          IMAGE_TAG="${IMAGE_TAG:-${BRANCH##*/}}"
+          REGISTRY="${REGISTRY:-}"
+          IMAGE_PATH="${IMAGE_PATH:-$(basename "$(dirname "$PIPELINE")")/$(basename "$PIPELINE")}"
+          ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
+          echo "Building $ref from $PIPELINE/Containerfile"
+          buildah bud -t "$ref" -f "$PIPELINE/Containerfile" "$PIPELINE"
+          echo "IMAGE_REF=$ref" >> "$GITHUB_ENV"
+
+      - name: Build with configure/make
+        if: contains(env.files, 'configure')
+        run: |
+          set -euo pipefail
+          pushd "$PIPELINE" >/dev/null
+          chmod +x ./configure || true
+          ./configure
+          make -j"$(nproc)"
+          popd >/dev/null
+
+      - name: Build with Maven
+        if: contains(env.files, 'pom.xml')
+        run: |
+          set -euo pipefail
+          mvn -f "$PIPELINE/pom.xml" -B -U -ntp package
+
+      - name: Build with Node (npm)
+        if: contains(env.files, 'package.json')
+        run: |
+          set -euo pipefail
+          npm --prefix "$PIPELINE" ci
+          npm --prefix "$PIPELINE" run build --if-present
+
+      - name: Build with Docker Compose
+        if: contains(env.files, 'docker-compose.yml')
+        run: |
+          set -euo pipefail
+          docker compose -f "$PIPELINE/docker-compose.yml" build
+
+      - name: Build with Mise
+        if: contains(env.files, 'mise.toml')
+        run: |
+          set -euo pipefail
+          mise run -C "$PIPELINE" build
+
+      - name: Build .NET
+        if: contains(env.files, '.csproj') || contains(env.files, 'global.json') || contains(env.files, 'NuGet.config')
+        run: |
+          set -euo pipefail
+          pushd "$PIPELINE" >/dev/null
+          dotnet restore
+          dotnet build -c Release
+          dotnet test -c Release --no-build || true
+          popd >/dev/null
         
