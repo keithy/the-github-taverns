@@ -26,6 +26,10 @@ jobs:
             echo "BUILDER=$builder_name"
             echo "TECH=${builder_name#*-}"
           } >> "$GITHUB_ENV"
+      - name: Pre-build hooks
+        run: |
+          set -euo pipefail
+          find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
       - name: Build image
         id: build
         run: |
@@ -37,6 +41,10 @@ jobs:
           ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
           docker build -t "$ref" "$PIPELINE"
           echo "IMAGE_REF=$ref" >> "$GITHUB_OUTPUT"
+      - name: Post-build hooks
+        run: |
+          set -euo pipefail
+          find hooks/post-build.d hooks/${TECH}/post-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
       - name: Prepare payload
         run: |
           set -euo pipefail
