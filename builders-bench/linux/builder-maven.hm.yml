@@ -1,4 +1,4 @@
-#HM trigger="pom.xml" workflow=".github/workflows/builder-maven.yml"
+#HM trigger="pom.xml"
 name: Builder-Maven
 on:
   workflow_dispatch:
@@ -21,6 +21,15 @@ jobs:
       - name: Import env
         run: |
           echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
-      - run: |
+      - name: mvn validate
+        run: |
+          set -euo pipefail
+          mvn -f "${{ inputs.pipeline }}/pom.xml" -B -U -ntp -q validate
+      - name: mvn package
+        run: |
           set -euo pipefail
           mvn -f "${{ inputs.pipeline }}/pom.xml" -B -U -ntp package
+      - name: mvn test
+        run: |
+          set -euo pipefail
+          mvn -f "${{ inputs.pipeline }}/pom.xml" -B -U -ntp -DskipTests=false test

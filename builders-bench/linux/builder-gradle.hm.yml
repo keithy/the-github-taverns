@@ -1,4 +1,4 @@
-#HM trigger="build.gradle" workflow=".github/workflows/builder-gradle.yml"
+#HM trigger="build.gradle"
 name: Builder-Gradle
 on:
   workflow_dispatch:
@@ -21,10 +21,16 @@ jobs:
       - name: Import env
         run: |
           echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
-      - name: Gradle build
+      - name: Gradle assemble
         run: |
           set -euo pipefail
           pushd "${{ inputs.pipeline }}" >/dev/null
           chmod +x ./gradlew || true
-          if [[ -x ./gradlew ]]; then ./gradlew build --no-daemon; else gradle build --no-daemon; fi
+          if [[ -x ./gradlew ]]; then ./gradlew assemble --no-daemon; else gradle assemble --no-daemon; fi
+          popd >/dev/null
+      - name: Gradle test
+        run: |
+          set -euo pipefail
+          pushd "${{ inputs.pipeline }}" >/dev/null
+          if [[ -x ./gradlew ]]; then ./gradlew test --no-daemon; else gradle test --no-daemon; fi
           popd >/dev/null

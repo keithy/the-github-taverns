@@ -1,4 +1,4 @@
-#HM trigger="package.json" workflow=".github/workflows/builder-node.yml"
+#HM trigger="package.json"
 name: Builder-Node
 on:
   workflow_dispatch:
@@ -21,7 +21,15 @@ jobs:
       - name: Import env
         run: |
           echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
-      - run: |
+      - name: npm ci
+        run: |
           set -euo pipefail
           npm --prefix "${{ inputs.pipeline }}" ci
+      - name: npm build
+        run: |
+          set -euo pipefail
           npm --prefix "${{ inputs.pipeline }}" run build --if-present
+      - name: npm test
+        run: |
+          set -euo pipefail
+          npm --prefix "${{ inputs.pipeline }}" test --if-present
