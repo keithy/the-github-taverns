@@ -18,6 +18,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+
       - name: Import env
         run: |
           echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
@@ -26,10 +27,12 @@ jobs:
             echo "BUILDER=$builder_name"
             echo "TECH=${builder_name#*-}"
           } >> "$GITHUB_ENV"
+
       - name: Pre-build hooks
         run: |
           set -euo pipefail
           find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
+
       - name: buildah bud
         run: |
           set -euo pipefail
@@ -40,10 +43,12 @@ jobs:
           ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
           buildah bud -t "$ref" -f "$PIPELINE/Containerfile" "$PIPELINE"
           echo "IMAGE_REF=$ref" >> "$GITHUB_OUTPUT"
+
       - name: Post-build hooks
         run: |
           set -euo pipefail
           find hooks/post-build.d hooks/${TECH}/post-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
+
       - name: Prepare payload
         run: |
           set -euo pipefail
