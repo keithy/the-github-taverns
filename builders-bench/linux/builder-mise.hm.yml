@@ -1,4 +1,4 @@
-#HM trigger="mise.toml" workflow=".github/workflows/builder-mise.yml"
+#HM trigger="mise.toml"
 name: Builder-Mise
 on:
   workflow_dispatch:

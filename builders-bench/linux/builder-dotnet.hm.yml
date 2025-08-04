@@ -1,4 +1,4 @@
-#HM trigger=".csproj|global.json|NuGet.config" workflow=".github/workflows/builder-dotnet.yml"
+#HM trigger=".csproj|global.json|NuGet.config"
 name: Builder-DotNet
 on:
   workflow_dispatch:

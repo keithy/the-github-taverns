@@ -1,4 +1,4 @@
-#HM trigger="Dockerfile" workflow=".github/workflows/builder-docker.yml"
+#HM trigger="Dockerfile"
 name: Builder-Docker
 on:
   workflow_dispatch:
@@ -21,7 +21,9 @@ jobs:
       - name: Import env
         run: |
           echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
-      - run: |
+      - name: Build image
+        id: build
+        run: |
           set -euo pipefail
           PIPELINE="${{ inputs.pipeline }}"
           IMAGE_TAG="${IMAGE_TAG:-${GITHUB_REF_NAME}}"
@@ -30,3 +32,11 @@ jobs:
           ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
           docker build -t "$ref" "$PIPELINE"
           echo "IMAGE_REF=$ref" >> "$GITHUB_OUTPUT"
+  next:
+    needs: build
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Harbour Master Dispatch
+        run: |
+          echo "dispatching .github/workflows/harbour-master.hm.yml"

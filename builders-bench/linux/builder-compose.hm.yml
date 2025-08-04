@@ -1,4 +1,4 @@
-#HM trigger="docker-compose.yml" workflow=".github/workflows/builder-compose.yml"
+#HM trigger="docker-compose.yml"
 name: Builder-Compose
 on:
   workflow_dispatch:

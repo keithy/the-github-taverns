@@ -1,4 +1,4 @@
-#HM trigger="configure" workflow=".github/workflows/builder-configure-make.yml"
+#HM trigger="configure"
 name: Builder-Configure-Make
 on:
   workflow_dispatch:
