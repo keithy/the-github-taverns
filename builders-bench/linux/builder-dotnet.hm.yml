@@ -21,10 +21,21 @@ jobs:
       - name: Import env
         run: |
           echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
-      - run: |
+      - name: dotnet restore
+        run: |
           set -euo pipefail
           pushd "${{ inputs.pipeline }}" >/dev/null
           dotnet restore
+          popd >/dev/null
+      - name: dotnet build
+        run: |
+          set -euo pipefail
+          pushd "${{ inputs.pipeline }}" >/dev/null
           dotnet build -c Release
+          popd >/dev/null
+      - name: dotnet test
+        run: |
+          set -euo pipefail
+          pushd "${{ inputs.pipeline }}" >/dev/null
           dotnet test -c Release --no-build || true
           popd >/dev/null
