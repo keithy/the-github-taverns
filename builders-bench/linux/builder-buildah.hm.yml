@@ -1,3 +1,4 @@
+#HM trigger="Containerfile" workflow=".github/workflows/builder-buildah.yml"
 name: Builder-Buildah
 on:
   workflow_dispatch:

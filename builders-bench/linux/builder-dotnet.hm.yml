@@ -1,3 +1,4 @@
+#HM trigger=".csproj" workflow=".github/workflows/builder-dotnet.yml"
 name: Builder-DotNet
 on:
   workflow_dispatch:

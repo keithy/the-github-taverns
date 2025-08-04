@@ -1,3 +1,4 @@
+#HM trigger="pom.xml" workflow=".github/workflows/builder-maven.yml"
 name: Builder-Maven
 on:
   workflow_dispatch:

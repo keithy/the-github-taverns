@@ -1,3 +1,4 @@
+#HM trigger="Dockerfile" workflow=".github/workflows/builder-docker.yml"
 name: Builder-Docker
 on:
   workflow_dispatch:

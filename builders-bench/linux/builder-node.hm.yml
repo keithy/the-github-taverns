@@ -1,3 +1,4 @@
+#HM trigger="package.json" workflow=".github/workflows/builder-node.yml"
 name: Builder-Node
 on:
   workflow_dispatch:

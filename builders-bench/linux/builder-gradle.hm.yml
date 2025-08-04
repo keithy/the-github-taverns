@@ -1,3 +1,4 @@
+#HM trigger="build.gradle" workflow=".github/workflows/builder-gradle.yml"
 name: Builder-Gradle
 on:
   workflow_dispatch:
