@@ -21,6 +21,11 @@ jobs:
       - name: Import env
         run: |
           echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+          builder_name="${GITHUB_WORKFLOW%.hm.yml}"
+          {
+            echo "BUILDER=$builder_name"
+            echo "TECH=${builder_name#*-}"
+          } >> "$GITHUB_ENV"
       - name: Build image
         id: build
         run: |
@@ -32,11 +37,12 @@ jobs:
           ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
           docker build -t "$ref" "$PIPELINE"
           echo "IMAGE_REF=$ref" >> "$GITHUB_OUTPUT"
-  next:
-    needs: build
-    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
-    steps:
-      - uses: actions/checkout@v4
+      - name: Prepare payload
+        run: |
+          set -euo pipefail
+          env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
+          sed -i '/^env_json=/d' "$GITHUB_ENV"
+          echo "env_json=$env_json" >> "$GITHUB_ENV"
       - name: Harbour Master Dispatch
         run: |
           echo "dispatching .github/workflows/harbour-master.hm.yml"

@@ -33,3 +33,20 @@ jobs:
         run: |
           set -euo pipefail
           mvn -f "${{ inputs.pipeline }}/pom.xml" -B -U -ntp -DskipTests=false test
+      - name: Post-build hooks
+        run: |
+          set -euo pipefail
+          for dir in ".github/hooks/post-build.d" "${{ inputs.pipeline }}/hooks/post-build.d"; do
+            if [[ -d "$dir" ]]; then
+              for f in "$dir"/*; do
+                [[ -f "$f" && -x "$f" ]] || continue
+                "$f"
+              done
+            fi
+          done
+      - name: Prepare payload
+        run: |
+          set -euo pipefail
+          env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
+          sed -i '/^env_json=/d' "$GITHUB_ENV"
+          echo "env_json=$env_json" >> "$GITHUB_ENV"

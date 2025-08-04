@@ -90,19 +90,19 @@ jobs:
             fi
           done
 
-      - name: Prepare env payload
+      - name: Prepare payload
         id: prepare
         run: |
           set -euo pipefail
-          jq -Rs 'split("\n")|map(select(length>0))|map(split("="))|map({(.[0]):.[1]})|add' < "$GITHUB_ENV" > env.json
-          echo "ENV_JSON=$(cat env.json)" >> "$GITHUB_OUTPUT"
+          env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
+          echo "env_json=$env_json" >> "$GITHUB_OUTPUT"
 
       - name: Metadata-driven dispatch
         env:
           GH_TOKEN: ${{ github.token }}
           ref: ${{ github.sha }}
           runner: ${{ matrix.runner }}
-          env_json: ${{ steps.prepare.outputs.ENV_JSON }}
+          env_json: ${{ steps.prepare.outputs.env_json }}
         run: |
           set -euo pipefail
          
