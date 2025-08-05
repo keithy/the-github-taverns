@@ -1,5 +1,5 @@
-#HM trigger=".csproj|global.json|NuGet.config"
-name: Builder-DotNet
+#HM trigger="package.json"
+name: Builder-Node
 on:
   workflow_dispatch:
     inputs:
@@ -28,31 +28,25 @@ jobs:
             echo "TECH=${builder_name#*-}"
           } >> "$GITHUB_ENV"
 
+      - name: npm ci
+        run: |
+          set -euo pipefail
+          npm --prefix "${{ inputs.pipeline }}" ci
+
       - name: Pre-build hooks
         run: |
           set -euo pipefail
           find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
 
-      - name: dotnet restore
+      - name: npm build
         run: |
           set -euo pipefail
-          pushd "${{ inputs.pipeline }}" >/dev/null
-          dotnet restore
-          popd >/dev/null
+          npm --prefix "${{ inputs.pipeline }}" run build --if-present
 
-      - name: dotnet build
+      - name: npm test
         run: |
           set -euo pipefail
-          pushd "${{ inputs.pipeline }}" >/dev/null
-          dotnet build -c Release
-          popd >/dev/null
-
-      - name: dotnet test
-        run: |
-          set -euo pipefail
-          pushd "${{ inputs.pipeline }}" >/dev/null
-          dotnet test -c Release --no-build || true
-          popd >/dev/null
+          npm --prefix "${{ inputs.pipeline }}" test --if-present
 
       - name: Post-build hooks
         run: |
@@ -67,6 +61,7 @@ jobs:
           echo "env_json=$env_json" >> "$GITHUB_ENV"
 
       - name: Harbour Master Dispatch
+        # workflow path conforms to .github/workflows/<worker>.hm.yml
         uses: ./.github/workflows/harbour-master.hm.yml
         with:
           pipeline: ${{ inputs.pipeline }}

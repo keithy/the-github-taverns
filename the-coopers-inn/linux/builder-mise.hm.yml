@@ -1,5 +1,5 @@
-#HM trigger="Containerfile" workflow=".github/workflows/builder-buildah.yml"
-name: Builder-Buildah
+#HM trigger="mise.toml"
+name: Builder-Mise
 on:
   workflow_dispatch:
     inputs:
@@ -10,6 +10,8 @@ on:
       runner:
         required: false
       env:
+        required: false
+      task:
         required: false
 jobs:
   build:
@@ -33,16 +35,15 @@ jobs:
           set -euo pipefail
           find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
 
-      - name: buildah bud
+      - name: mise run
         run: |
           set -euo pipefail
-          PIPELINE="${{ inputs.pipeline }}"
-          IMAGE_TAG="${IMAGE_TAG:-${GITHUB_REF_NAME}}"
-          REGISTRY="${REGISTRY:-}"
-          IMAGE_PATH="${IMAGE_PATH:-$(basename "$(dirname "$PIPELINE")")/$(basename "$PIPELINE")}"
-          ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
-          buildah bud -t "$ref" -f "$PIPELINE/Containerfile" "$PIPELINE"
-          echo "IMAGE_REF=$ref" >> "$GITHUB_OUTPUT"
+          task="${{ inputs.task }}"
+          if [[ -n "$task" ]]; then
+            mise run -C "${{ inputs.pipeline }}" "$task"
+          else
+            mise run -C "${{ inputs.pipeline }}" build
+          fi
 
       - name: Post-build hooks
         run: |
@@ -55,3 +56,11 @@ jobs:
           env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
           sed -i '/^env_json=/d' "$GITHUB_ENV"
           echo "env_json=$env_json" >> "$GITHUB_ENV"
+
+      - name: Harbour Master Dispatch
+        # workflow path conforms to .github/workflows/<worker>.hm.yml
+        uses: ./.github/workflows/harbour-master.hm.yml
+        with:
+          pipeline: ${{ inputs.pipeline }}
+          ref: ${{ inputs.ref }}
+          env: ${{ env.env_json }}

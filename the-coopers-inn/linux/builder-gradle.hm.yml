@@ -1,5 +1,5 @@
-#HM trigger="package.json"
-name: Builder-Node
+#HM trigger="build.gradle"
+name: Builder-Gradle
 on:
   workflow_dispatch:
     inputs:
@@ -28,25 +28,25 @@ jobs:
             echo "TECH=${builder_name#*-}"
           } >> "$GITHUB_ENV"
 
-      - name: npm ci
-        run: |
-          set -euo pipefail
-          npm --prefix "${{ inputs.pipeline }}" ci
-
       - name: Pre-build hooks
         run: |
           set -euo pipefail
           find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
 
-      - name: npm build
+      - name: Gradle assemble
         run: |
           set -euo pipefail
-          npm --prefix "${{ inputs.pipeline }}" run build --if-present
+          pushd "${{ inputs.pipeline }}" >/dev/null
+          chmod +x ./gradlew || true
+          if [[ -x ./gradlew ]]; then ./gradlew assemble --no-daemon; else gradle assemble --no-daemon; fi
+          popd >/devnull
 
-      - name: npm test
+      - name: Gradle test
         run: |
           set -euo pipefail
-          npm --prefix "${{ inputs.pipeline }}" test --if-present
+          pushd "${{ inputs.pipeline }}" >/dev/null
+          if [[ -x ./gradlew ]]; then ./gradlew test --no-daemon; else gradle test --no-daemon; fi
+          popd >/dev/null
 
       - name: Post-build hooks
         run: |
@@ -61,6 +61,7 @@ jobs:
           echo "env_json=$env_json" >> "$GITHUB_ENV"
 
       - name: Harbour Master Dispatch
+        # workflow path conforms to .github/workflows/<worker>.hm.yml
         uses: ./.github/workflows/harbour-master.hm.yml
         with:
           pipeline: ${{ inputs.pipeline }}

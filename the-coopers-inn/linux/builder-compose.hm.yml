@@ -1,5 +1,5 @@
-#HM trigger="Dockerfile"
-name: Builder-Docker
+#HM trigger="docker-compose.yml"
+name: Builder-Compose
 on:
   workflow_dispatch:
     inputs:
@@ -33,17 +33,10 @@ jobs:
           set -euo pipefail
           find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
 
-      - name: Build image
-        id: build
+      - name: docker compose build
         run: |
           set -euo pipefail
-          PIPELINE="${{ inputs.pipeline }}"
-          IMAGE_TAG="${IMAGE_TAG:-${GITHUB_REF_NAME}}"
-          REGISTRY="${REGISTRY:-}"
-          IMAGE_PATH="${IMAGE_PATH:-$(basename "$(dirname "$PIPELINE")")/$(basename "$PIPELINE")}"
-          ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
-          docker build -t "$ref" "$PIPELINE"
-          echo "IMAGE_REF=$ref" >> "$GITHUB_OUTPUT"
+          docker compose -f "${{ inputs.pipeline }}/docker-compose.yml" build
 
       - name: Post-build hooks
         run: |
@@ -58,6 +51,7 @@ jobs:
           echo "env_json=$env_json" >> "$GITHUB_ENV"
 
       - name: Harbour Master Dispatch
+        # workflow path conforms to .github/workflows/<worker>.hm.yml
         uses: ./.github/workflows/harbour-master.hm.yml
         with:
           pipeline: ${{ inputs.pipeline }}

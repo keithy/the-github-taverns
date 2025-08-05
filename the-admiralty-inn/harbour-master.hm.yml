@@ -1,0 +1,48 @@
+name: Harbour-Master
+
+on:
+  workflow_call:
+    inputs:
+      pipeline:
+        required: false
+        type: string
+      ref:
+        required: true
+        type: string
+      env:
+        required: false
+        type: string
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Import env
+        run: |
+          echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+
+      - name: Decode payload
+        id: payload
+        run: |
+          env_json='${{ inputs.env }}'
+          echo "env_json=$env_json" >> $GITHUB_OUTPUT
+
+      - name: Route to inspector
+        env:
+          env_json: ${{ steps.payload.outputs.env_json }}
+        run: |
+          set -euo pipefail
+          PIPELINE="${PIPELINE:-${{ inputs.pipeline }}}"
+          files="$(ls "$PIPELINE" 2>/dev/null || true)"
+
+          if echo "$files" | grep -q docker-compose.yml; then
+            echo "Would call inspect-flagon.hm.yml"
+          elif echo "$files" | grep -q -E 'Dockerfile|Containerfile'; then
+            echo "Would call inspect-keg.hm.yml"
+          else
+            echo "Would call inspect-sack.hm.yml"
+          fi

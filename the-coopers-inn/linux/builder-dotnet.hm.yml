@@ -1,5 +1,5 @@
-#HM trigger="mise.toml"
-name: Builder-Mise
+#HM trigger=".csproj|global.json|NuGet.config"
+name: Builder-DotNet
 on:
   workflow_dispatch:
     inputs:
@@ -10,8 +10,6 @@ on:
       runner:
         required: false
       env:
-        required: false
-      task:
         required: false
 jobs:
   build:
@@ -35,15 +33,26 @@ jobs:
           set -euo pipefail
           find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
 
-      - name: mise run
+      - name: dotnet restore
         run: |
           set -euo pipefail
-          task="${{ inputs.task }}"
-          if [[ -n "$task" ]]; then
-            mise run -C "${{ inputs.pipeline }}" "$task"
-          else
-            mise run -C "${{ inputs.pipeline }}" build
-          fi
+          pushd "${{ inputs.pipeline }}" >/dev/null
+          dotnet restore
+          popd >/dev/null
+
+      - name: dotnet build
+        run: |
+          set -euo pipefail
+          pushd "${{ inputs.pipeline }}" >/dev/null
+          dotnet build -c Release
+          popd >/dev/null
+
+      - name: dotnet test
+        run: |
+          set -euo pipefail
+          pushd "${{ inputs.pipeline }}" >/dev/null
+          dotnet test -c Release --no-build || true
+          popd >/dev/null
 
       - name: Post-build hooks
         run: |
@@ -58,6 +67,7 @@ jobs:
           echo "env_json=$env_json" >> "$GITHUB_ENV"
 
       - name: Harbour Master Dispatch
+        # workflow path conforms to .github/workflows/<worker>.hm.yml
         uses: ./.github/workflows/harbour-master.hm.yml
         with:
           pipeline: ${{ inputs.pipeline }}

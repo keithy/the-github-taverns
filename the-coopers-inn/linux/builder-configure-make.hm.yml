@@ -1,5 +1,5 @@
-#HM trigger="build.gradle"
-name: Builder-Gradle
+#HM trigger="configure"
+name: Builder-Configure-Make
 on:
   workflow_dispatch:
     inputs:
@@ -33,19 +33,13 @@ jobs:
           set -euo pipefail
           find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
 
-      - name: Gradle assemble
+      - name: configure && make
         run: |
           set -euo pipefail
           pushd "${{ inputs.pipeline }}" >/dev/null
-          chmod +x ./gradlew || true
-          if [[ -x ./gradlew ]]; then ./gradlew assemble --no-daemon; else gradle assemble --no-daemon; fi
-          popd >/devnull
-
-      - name: Gradle test
-        run: |
-          set -euo pipefail
-          pushd "${{ inputs.pipeline }}" >/dev/null
-          if [[ -x ./gradlew ]]; then ./gradlew test --no-daemon; else gradle test --no-daemon; fi
+          chmod +x ./configure || true
+          ./configure
+          make -j"$(nproc)"
           popd >/dev/null
 
       - name: Post-build hooks
@@ -61,6 +55,7 @@ jobs:
           echo "env_json=$env_json" >> "$GITHUB_ENV"
 
       - name: Harbour Master Dispatch
+        # workflow path conforms to .github/workflows/<worker>.hm.yml
         uses: ./.github/workflows/harbour-master.hm.yml
         with:
           pipeline: ${{ inputs.pipeline }}
