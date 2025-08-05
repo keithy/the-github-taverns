@@ -1,7 +1,7 @@
 tech="${TECH:-}";  pipeline="${PIPELINE:-}"
 top="${pipeline%%/*}"
 f="${0##*/}"
-case "the-github-taverns/examples/hooks/20-post-build/10-echo.sh" in
+case "$f" in
   "${tech}--"*) : ;;
   *"--${top}--"*) : ;;
   *"--"*) exit 0 ;;
