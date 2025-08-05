@@ -1,9 +1,9 @@
-tech="${TECH:-}"; type="${ITEM_TYPE:-}"; pipeline="${PIPELINE:-}"
+tech="${TECH:-}";  pipeline="${PIPELINE:-}"
 top="${pipeline%%/*}"
 f="${0##*/}"
 case "the-github-taverns/examples/hooks/70-report/10-summarize.sh" in
   "${tech}--"*) : ;;
-  *"--${type}--"*) : ;;
+  *"--${top}--"*) : ;;
   *"--"*) exit 0 ;;
   *) : ;;
 esac
