@@ -76,10 +76,6 @@ jobs:
           files="$(ls $PIPELINE || echo '')"
           VARS
 
-      - name: Pre-build hooks
-        run: |
-          set -euo pipefail
-          find hooks/10-pre-build.d "$PIPELINE"/hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
       - name: Prepare payload
         id: prepare
@@ -110,7 +106,7 @@ jobs:
 
           run_builder() {
             local wf="$1"; shift
-            gh workflow run "$wf" -f pipeline="$PIPELINE" -f ref="$ref" -f runner="$runner" -f env="$env_json"
+            gh workflow run "$wf" -f pipeline="$PIPELINE" -f ref="$ref" -f runner="$runner" -f env_json="$env_json"
           }
 
           for wf in "${!builders[@]}"; do

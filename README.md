@@ -14,7 +14,7 @@ Shared GitHub workflows and CI/CD configuration for the devops-cove ecosystem.
 ```
 the-github-taverns/
 ├── the-admiralty-inn/               # The harbour-master's rest (the authorities)
-│   └── harbour-master.hm.yml        # Workflow that recieves incoming items
+│   └── harbour-master.hm.yml        # Workflow that receives incoming items
 ├── the-coopers-inn/                 # Cask/keg builders retreat (the artefact makers)
 │   └── linux/                       # Tech specialist artefact makers
 ├── the-lighthouse-inn/              # Hangout for off duty watchmen

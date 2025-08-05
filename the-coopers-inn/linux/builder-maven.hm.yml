@@ -31,7 +31,8 @@ jobs:
       - name: Pre-build hooks
         run: |
           set -euo pipefail
-          find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+          PIPELINE='${{ inputs.pipeline }}'
+          find hooks/10-pre-build.d "$PIPELINE"/hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
       - name: mvn validate
         run: |
@@ -51,7 +52,8 @@ jobs:
       - name: Post-build hooks
         run: |
           set -euo pipefail
-          find hooks/post-build.d hooks/${TECH}/post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+          PIPELINE='${{ inputs.pipeline }}'
+          find hooks/20-post-build.d "$PIPELINE"/hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
       - name: Prepare payload
         run: |
@@ -66,4 +68,4 @@ jobs:
         with:
           pipeline: ${{ inputs.pipeline }}
           ref: ${{ inputs.ref }}
-          env: ${{ env.env_json }}
+          env_json: ${{ env.env_json }}
