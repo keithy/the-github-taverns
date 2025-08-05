@@ -9,7 +9,10 @@ on:
       ref:
         required: true
         type: string
-      env:
+      tech:
+        required: true
+        type: string
+      env_json:
         required: false
         type: string
 
@@ -22,27 +25,37 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Import env
-        run: |
-          echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
-
-      - name: Decode payload
-        id: payload
-        run: |
-          env_json='${{ inputs.env }}'
-          echo "env_json=$env_json" >> $GITHUB_OUTPUT
-
-      - name: Route to inspector
         env:
-          env_json: ${{ steps.payload.outputs.env_json }}
+          env_json: ${{ inputs.env_json }}
+        run: |
+          echo "$env_json" | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+
+      - name: Verify hooks (${{ inputs.tech }})
         run: |
           set -euo pipefail
-          PIPELINE="${PIPELINE:-${{ inputs.pipeline }}}"
-          files="$(ls "$PIPELINE" 2>/dev/null || true)"
+          # run each executable file in verify hooks (global and ${TECH}-specific)
+          find .github/hooks/verify.d .github/hooks/${{ inputs.tech }}/verify.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
 
-          if echo "$files" | grep -q docker-compose.yml; then
-            echo "Would call inspect-flagon.hm.yml"
-          elif echo "$files" | grep -q -E 'Dockerfile|Containerfile'; then
-            echo "Would call inspect-keg.hm.yml"
-          else
-            echo "Would call inspect-sack.hm.yml"
-          fi
+      - name: Pre-publish hooks (${{ inputs.tech }})
+        run: |
+          set -euo pipefail
+          # run each executable file in pre-publish hooks (global and ${TECH}-specific)
+          find .github/hooks/pre-publish.d .github/hooks/${{ inputs.tech }}/pre-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+
+      - name: Publish hooks (${{ inputs.tech }})
+        run: |
+          set -euo pipefail
+          # run each executable file in publish hooks (global and ${TECH}-specific)
+          find .github/hooks/publish.d .github/hooks/${{ inputs.tech }}/publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+
+      - name: Post-publish hooks (${{ inputs.tech }})
+        run: |
+          set -euo pipefail
+          # run each executable file in post-publish hooks (global and ${TECH}-specific)
+          find .github/hooks/post-publish.d .github/hooks/${{ inputs.tech }}/post-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+
+      - name: Report hooks (${{ inputs.tech }})
+        run: |
+          set -euo pipefail
+          # run each executable file in report hooks (global and ${TECH}-specific)
+          find .github/hooks/report.d .github/hooks/${{ inputs.tech }}/report.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null

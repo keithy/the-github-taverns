@@ -13,29 +13,42 @@ Shared GitHub workflows and CI/CD configuration for the devops-cove ecosystem.
 
 ```
 the-github-taverns/
-├── the-admiralty-inn/               # Harbour master bench (the authorities)
-│   └── harbour-master.hm.yml        # Handoff reusable workflow (bench copy)
-├── the-coopers-inn/                 # Builders bench (the coopers)
-│   └── linux/                        # Builder workflows (bench copies)
-├── the-lighthouse-inn/              # Watchmen bench (the lighthouse)
-└── the-hook-and-tackle/             # Shared hook scripts
+├── the-admiralty-inn/               # The harbour-master's rest (the authorities)
+│   └── harbour-master.hm.yml        # Workflow that recieves incoming items
+├── the-coopers-inn/                 # Cask/keg builders retreat (the artefact makers)
+│   └── linux/                       # Tech specialist artefact makers
+├── the-lighthouse-inn/              # Hangout for off duty watchmen
+└── the-hook-and-tackle/             # Box of tricks, scripts and hooks
 ```
 
 ## Usage
 
-Add this repository as a submodule to harbours that need these workflows:
+This repository is provided as a submodule of devops-cove:
 
 ```bash
-git submodule add https://github.com/keithy/the-github-taverns.git .github/harbour-master
+git clone https://github.com/keithy/devops-cove.git 
 git submodule update --init
 ```
 
-Then copy selected bench items into the harbour’s workflows:
+Populate one of the empty harbour-templates, e.g. Polperro.
+Search the pubs for workers that you need, and copy them into the harbour’s `.github/workflows`
 
 ```bash
 # Example: adopt the docker builder and harbour-master handoff (from the-github-taverns)
-cp .github/harbour-master/the-coopers-inn/linux/builder-docker.hm.yml .github/workflows/
-cp .github/harbour-master/the-admiralty-inn/harbour-master.hm.yml .github/workflows/
+cd ~/devops-cove/polperro/.github
+
+# Add a watchman
+cp -v  ~/devops-cove/the-github-taverns/the-lighthouse-inn/watchman-linus.hm.yml workflows
+
+# Add the harbour-master
+cp -v  ~/devops-cove/the-github-taverns/the-admiralty-inn/harbour-master.hm.yml workflows
+
+# Add tech builders for your needs
+cp -v  ~/devops-cove/the-github-taverns/the-coopers-inn/linux/builder-docker.hm.yml  workflows
+cp -v  ~/devops-cove/the-github-taverns/the-coopers-inn/linux/builder-buildah.hm.yml workflows
+
+# Add the inspectors for your artefact types
+cp -v  ~/devops-cove/the-github-taverns/the-shelock-holmes/investigator-keg.hm.yml workflows
 ```
 
 ## Available Workflows
@@ -49,5 +62,5 @@ Most usually each *cove-port* will adopt one or more watchman. A watchman is a w
 for particular changes and triggers pipeline activities. Different watchmen specialise in watching different things.
 
 watchman-linus runs on a linux runner and watches three types of repository branches. If this is not exactly the
-required behaviour, the maintainers may be asked to tweak the workflow and publish it under a new name.
-Each *cove-port* may select their watchmen from those available.
+required behaviour, the Navy (maintainers) may be asked to tweak the workflow code and publish it under a
+new watchman name. Each *cove-port* may select their watchmen from those available.

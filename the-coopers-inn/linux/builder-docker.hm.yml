@@ -31,7 +31,7 @@ jobs:
       - name: Pre-build hooks
         run: |
           set -euo pipefail
-          find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
+          find hooks/pre-build.d hooks/${TECH}/pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
 
       - name: Build image
         id: build
@@ -48,7 +48,7 @@ jobs:
       - name: Post-build hooks
         run: |
           set -euo pipefail
-          find hooks/post-build.d hooks/${TECH}/post-build.d -type f -perm -u+x 2>/dev/null -print0 | xargs -0 -r -n1 sh -c '"$0"'
+          find hooks/post-build.d hooks/${TECH}/post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
 
       - name: Prepare payload
         run: |
