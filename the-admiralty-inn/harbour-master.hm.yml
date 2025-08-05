@@ -33,29 +33,24 @@ jobs:
       - name: Verify hooks (${{ inputs.tech }})
         run: |
           set -euo pipefail
-          # run each executable file in verify hooks (global and ${TECH}-specific)
-          find .github/hooks/verify.d .github/hooks/${{ inputs.tech }}/verify.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+          find hooks/30-verify.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
 
       - name: Pre-publish hooks (${{ inputs.tech }})
         run: |
           set -euo pipefail
-          # run each executable file in pre-publish hooks (global and ${TECH}-specific)
-          find .github/hooks/pre-publish.d .github/hooks/${{ inputs.tech }}/pre-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+          find hooks/40-pre-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
 
       - name: Publish hooks (${{ inputs.tech }})
         run: |
           set -euo pipefail
-          # run each executable file in publish hooks (global and ${TECH}-specific)
-          find .github/hooks/publish.d .github/hooks/${{ inputs.tech }}/publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+          find hooks/50-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
 
       - name: Post-publish hooks (${{ inputs.tech }})
         run: |
           set -euo pipefail
-          # run each executable file in post-publish hooks (global and ${TECH}-specific)
-          find .github/hooks/post-publish.d .github/hooks/${{ inputs.tech }}/post-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+          find hooks/60-post-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
 
       - name: Report hooks (${{ inputs.tech }})
         run: |
           set -euo pipefail
-          # run each executable file in report hooks (global and ${TECH}-specific)
-          find .github/hooks/report.d .github/hooks/${{ inputs.tech }}/report.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+          find hooks/70-report.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null

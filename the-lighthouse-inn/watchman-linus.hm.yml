@@ -79,16 +79,7 @@ jobs:
       - name: Pre-build hooks
         run: |
           set -euo pipefail
-          for dir in \
-            ".github/hooks/pre-build.d" \
-            "$PIPELINE/hooks/pre-build.d"; do
-            if [[ -d "$dir" ]]; then
-              for f in "$dir"/*; do
-                [[ -f "$f" && -x "$f" ]] || continue
-                "$f"
-              done
-            fi
-          done
+          find hooks/10-pre-build.d "$PIPELINE"/hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
       - name: Prepare payload
         id: prepare
