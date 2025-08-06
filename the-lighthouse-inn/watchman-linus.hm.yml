@@ -72,8 +72,8 @@ jobs:
           cat <<"VARS" | tee -a $GITHUB_ENV
           BRANCH=$BRANCH
           BRANCH_CONFIG=${BRANCH%%/*}.branch.env
-          HARBOUR=${GITHUB_WORKSPACE##*/}
           HARBOUR_ROOT=$GITHUB_WORKSPACE
+          HARBOUR=${HARBOUR_ROOT##*/}
           PIPELINE=$PIPELINE
           files="$(ls $PIPELINE || echo '')"
           VARS
