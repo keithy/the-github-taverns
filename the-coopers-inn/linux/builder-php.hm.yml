@@ -48,16 +48,18 @@ jobs:
       - name: composer install
         env:
           COMPOSER_BIN: ${{ env.COMPOSER_BIN || 'composer' }}
+        working-directory: ${{ inputs.pipeline }}
         run: |
           set -euo pipefail
-          "$COMPOSER_BIN" --working-dir "${{ inputs.pipeline }}" install --no-interaction --no-progress
+          "$COMPOSER_BIN" install --no-interaction --no-progress
 
       - name: composer test
         env:
           COMPOSER_BIN: ${{ env.COMPOSER_BIN || 'composer' }}
+        working-directory: ${{ inputs.pipeline }}
         run: |
           set -euo pipefail
-          "$COMPOSER_BIN" --working-dir "${{ inputs.pipeline }}" test || true
+          "$COMPOSER_BIN" test || true
 
       - name: Post-build hooks
         run: |
