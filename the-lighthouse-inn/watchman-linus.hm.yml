@@ -1,119 +1,116 @@
+---
 name: Watchman-Bob
-
-on:
+true:
   push:
-    branches: [ "main", "experimental**" ]
+    branches:
+    - main
+    - experimental**
   pull_request:
-    branches: [ "main", "release" ]
-
+    branches:
+    - main
+    - release
 jobs:
   watching:
     name: Get Changed Pipelines
     runs-on: ubuntu-24.04
     outputs:
-      matrix: ${{ steps.spotting.outputs.matrix }}
+      matrix: "${{ steps.spotting.outputs.matrix }}"
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: "${{ github.event_name == 'pull_request' && 2 || 0 }}"
+    - name: Folders changed 4 levels deep
+      id: spotting
+      env:
+        IS_PR: "${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
+      run: |
+        if $IS_PR; then
+          branch=${{ github.base_ref }}
+          start=HEAD^1
+          stop=HEAD
+        else
+          branch=${{ github.ref_name }}
+          start=${{ github.event.before }}
+          stop=${{ github.event.after }}
+        fi
 
-      - name: Folders changed 4 levels deep
-        id: spotting
-        env:
-          IS_PR: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-        run: |
-          if $IS_PR; then
-            branch=${{ github.base_ref }}
-            start=HEAD^1
-            stop=HEAD
-          else
-            branch=${{ github.ref_name }}
-            start=${{ github.event.before }}
-            stop=${{ github.event.after }}
-          fi
+        changed="$(git diff --name-only -r $start $stop | sed -rn 's#^([^/]+/[^/]+/[^/]+/[^/]+)/.*#\1#p' | sort -u | xargs)"
 
-          changed="$(git diff --name-only -r $start $stop | sed -rn 's#^([^/]+/[^/]+/[^/]+/[^/]+)/.*#\1#p' | sort -u | xargs)"
+        find_var() { local name="$1"; shift 2; local def="$1"; shift 2; local f v; for f in "$@"; do v="$(sed -n "/^$name=/ { s/^$name=//; p ; q }" "$f" | xargs)"; [[ -n "$v" ]] && echo "$v" && return 0; done; echo "$def"; }
 
-          find_var() { local name="$1"; shift 2; local def="$1"; shift 2; local f v; for f in "$@"; do v="$(sed -n "/^$name=/ { s/^$name=//; p ; q }" "$f" | xargs)"; [[ -n "$v" ]] && echo "$v" && return 0; done; echo "$def"; }
+        matrix=$(for PIPELINE in $changed; do
+          branch_config="$(find_var BRANCH_CONFIG default: "${branch%%/*}.branch.env")"
+          config="$(find_var CONFIG default: 'default.env' \
+                                 search: $PIPELINE/.env           $PIPELINE/config/.env \
+                                         $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
+                                         config/$branch_config)"
+          runner="$(find_var RUNNER default: 'ubuntu-24.04' \
+                                 search:  $PIPELINE/.env           $PIPELINE/config/.env \
+                                          $PIPELINE/$config        $PIPELINE/config/$config \
+                                          $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
+                                          config/$branch_config)"
+          echo "{\"pipeline\": \"$PIPELINE\", \"runner\": \"$runner\", \"config\": \"$config\", \"branch\": \"$branch\" }"
+        done | jq -s .)
 
-          matrix=$(for PIPELINE in $changed; do
-            branch_config="$(find_var BRANCH_CONFIG default: "${branch%%/*}.branch.env")"
-            config="$(find_var CONFIG default: 'default.env' \
-                                   search: $PIPELINE/.env           $PIPELINE/config/.env \
-                                           $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
-                                           config/$branch_config)"
-            runner="$(find_var RUNNER default: 'ubuntu-24.04' \
-                                   search:  $PIPELINE/.env           $PIPELINE/config/.env \
-                                            $PIPELINE/$config        $PIPELINE/config/$config \
-                                            $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
-                                            config/$branch_config)"
-            echo "{\"pipeline\": \"$PIPELINE\", \"runner\": \"$runner\", \"config\": \"$config\", \"branch\": \"$branch\" }"
-          done | jq -s .)
-
-          echo "matrix=$matrix" | tee -a $GITHUB_OUTPUT
-
+        echo "matrix=$matrix" | tee -a $GITHUB_OUTPUT
   dispatch:
     needs: watching
     strategy:
-      matrix: ${{ fromJson(needs.watching.outputs.matrix) }}
-    runs-on: ${{ matrix.runner }}
+      matrix: "${{ fromJson(needs.watching.outputs.matrix) }}"
+    runs-on: "${{ matrix.runner }}"
     permissions:
       contents: read
       id-token: write
     steps:
-      - name: checkout
-        uses: actions/checkout@v4
+    - name: checkout
+      uses: actions/checkout@v4
+    - name: initialize
+      env:
+        BRANCH: "${{ matrix.branch }}"
+        PIPELINE: "${{ matrix.pipeline }}"
+      run: |
+        cat <<"VARS" | tee -a $GITHUB_ENV
+        BRANCH=$BRANCH
+        BRANCH_CONFIG=${BRANCH%%/*}.branch.env
+        HARBOUR_ROOT=$GITHUB_WORKSPACE
+        HARBOUR_NAME=${HARBOUR_ROOT##*/}
+        PIPELINE=$PIPELINE
+        files="$(ls $PIPELINE || echo '')"
+        VARS
+    - name: Prepare payload
+      run: |
+        set -euo pipefail
+        env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
+        sed -i '/^env_json=/d' "$GITHUB_ENV"
+        echo "env_json=$env_json" >> "$GITHUB_ENV"
+    - name: Metadata-driven dispatch
+      env:
+        GH_TOKEN: "${{ github.token }}"
+        ref: "${{ github.sha }}"
+        runner: "${{ matrix.runner }}"
+        env_json: "${{ steps.prepare.outputs.env_json }}"
+      run: |
+        set -euo pipefail
 
-      - name: initialize
-        env:
-          BRANCH: ${{ matrix.branch }}
-          PIPELINE: ${{ matrix.pipeline }}
-        run: |
-          cat <<"VARS" | tee -a $GITHUB_ENV
-          BRANCH=$BRANCH
-          BRANCH_CONFIG=${BRANCH%%/*}.branch.env
-          HARBOUR_ROOT=$GITHUB_WORKSPACE
-          HARBOUR=${HARBOUR_ROOT##*/}
-          PIPELINE=$PIPELINE
-          files="$(ls $PIPELINE || echo '')"
-          VARS
+        # Read builder metadata headers in the harbour repo:
+        #   #HM trigger="Dockerfile"
+        declare -A builders
+        while IFS= read -r line; do
+          file="${line%%:*}"
+          meta_line="${line#*:}"
+          trigger=${meta_line#*trigger="}
+          trigger=${trigger%%"*}
+          [[ -n "$trigger" ]] && builders["$file"]="$trigger"
+        done < <(grep -Rno '^#HM .*trigger=".*"' .github/workflows/builder-*.yml || true)
 
+        run_builder() {
+          local wf="$1"; shift
+          gh workflow run "$wf" -f pipeline="$PIPELINE" -f ref="$ref" -f runner="$runner" -f env_json="$env_json"
+        }
 
-      - name: Prepare payload
-        id: prepare
-        run: |
-          set -euo pipefail
-          env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
-          echo "env_json=$env_json" >> "$GITHUB_OUTPUT"
-
-      - name: Metadata-driven dispatch
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ref: ${{ github.sha }}
-          runner: ${{ matrix.runner }}
-          env_json: ${{ steps.prepare.outputs.env_json }}
-        run: |
-          set -euo pipefail
-         
-          # Read builder metadata headers in the harbour repo:
-          #   #HM trigger="Dockerfile"
-          declare -A builders
-          while IFS= read -r line; do
-            file="${line%%:*}"
-            meta_line="${line#*:}"
-            trigger=${meta_line#*trigger="}
-            trigger=${trigger%%"*}
-            [[ -n "$trigger" ]] && builders["$file"]="$trigger"
-          done < <(grep -Rno '^#HM .*trigger=".*"' .github/workflows/builder-*.yml || true)
-
-          run_builder() {
-            local wf="$1"; shift
-            gh workflow run "$wf" -f pipeline="$PIPELINE" -f ref="$ref" -f runner="$runner" -f env_json="$env_json"
-          }
-
-          for wf in "${!builders[@]}"; do
-            trig="${builders[$wf]}"
-            if [[ "$files" =~ $trig ]]; then
-              run_builder "$wf"
-            fi
-          done
+        for wf in "${!builders[@]}"; do
+          trig="${builders[$wf]}"
+          if [[ "$files" =~ $trig ]]; then
+            run_builder "$wf"
+          fi
+        done
