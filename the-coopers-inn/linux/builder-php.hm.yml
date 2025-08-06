@@ -1,6 +1,6 @@
-#HM trigger="composer.json"
+---
 name: Builder-PHP
-on:
+true:
   workflow_dispatch:
     inputs:
       pipeline:
@@ -13,70 +13,62 @@ on:
         required: false
 jobs:
   build:
-    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    runs-on: "${{ inputs.runner || 'ubuntu-24.04' }}"
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
+    - uses: actions/checkout@v4
+      with:
+        ref: "${{ inputs.ref }}"
+    - name: Set env name tech
+      run: |
+        echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+        builder_name="${GITHUB_WORKFLOW%.hm.yml}"
+        {
+          echo "BUILDER=$builder_name"
+          echo "TECH=${builder_name#*-}"
+        } >> "$GITHUB_ENV"
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: "${{ env.PHP_VERSION || '8.2' }}"
+        tools: composer
+    - name: Pre-build hooks
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        find "$HARBOUR_ROOT"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+    - name: Select composer binary
+      if: contains(env.files, 'beethoven.sh')
+      run: 'echo "COMPOSER_BIN=beethoven.sh" >> "$GITHUB_ENV"
 
-      - name: Set env name tech
-        run: |
-          echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
-          builder_name="${GITHUB_WORKFLOW%.hm.yml}"
-          {
-            echo "BUILDER=$builder_name"
-            echo "TECH=${builder_name#*-}"
-          } >> "$GITHUB_ENV"
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          tools: composer
-
-      - name: Pre-build hooks
-        run: |
-          set -euo pipefail
-          PIPELINE='${{ inputs.pipeline }}'
-          find hooks/10-pre-build.d "$PIPELINE"/hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
-
-      - name: Select composer binary
-        if: contains(env.files, 'beethoven.sh')
-        run: |
-          echo "COMPOSER_BIN=beethoven.sh" >> "$GITHUB_ENV"
-
-      - name: composer install
-        env:
-          COMPOSER_BIN: ${{ env.COMPOSER_BIN || 'composer' }}
-        working-directory: ${{ inputs.pipeline }}
-        run: |
-          set -euo pipefail
-          "$COMPOSER_BIN" install --no-interaction --no-progress
-
-      - name: composer test
-        env:
-          COMPOSER_BIN: ${{ env.COMPOSER_BIN || 'composer' }}
-        working-directory: ${{ inputs.pipeline }}
-        run: |
-          set -euo pipefail
-          "$COMPOSER_BIN" test || true
-
-      - name: Post-build hooks
-        run: |
-          set -euo pipefail
-          PIPELINE='${{ inputs.pipeline }}'
-          find hooks/20-post-build.d "$PIPELINE"/hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
-
-      - name: Prepare payload
-        run: |
-          set -euo pipefail
-          env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
-          sed -i '/^env_json=/d' "$GITHUB_ENV"
-          echo "env_json=$env_json" >> "$GITHUB_ENV"
-
-      - name: Harbour Master Dispatch
-        uses: ./.github/workflows/harbour-master.hm.yml
-        with:
-          pipeline: ${{ inputs.pipeline }}
-          ref: ${{ inputs.ref }}
-          env_json: ${{ env.env_json }}
+        '
+    - name: composer install
+      env:
+        COMPOSER_BIN: "${{ env.COMPOSER_BIN || 'composer' }}"
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        "$COMPOSER_BIN" install --no-interaction --no-progress
+    - name: composer test
+      env:
+        COMPOSER_BIN: "${{ env.COMPOSER_BIN || 'composer' }}"
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        "$COMPOSER_BIN" test || true
+    - name: Post-build hooks
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        find "$HARBOUR_ROOT"/hooks/20-post-build.d hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+    - name: Prepare payload
+      run: |
+        set -euo pipefail
+        env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
+        sed -i '/^env_json=/d' "$GITHUB_ENV"
+        echo "env_json=$env_json" >> "$GITHUB_ENV"
+    - name: Harbour Master Dispatch
+      uses: "./.github/workflows/harbour-master.hm.yml"
+      with:
+        pipeline: "${{ inputs.pipeline }}"
+        ref: "${{ inputs.ref }}"
+        env_json: "${{ env.env_json }}"
