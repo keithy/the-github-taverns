@@ -43,7 +43,7 @@ jobs:
       - name: Select composer binary
         if: contains(env.files, 'beethoven.sh')
         run: |
-          echo "COMPOSER_BIN=${{ inputs.pipeline }}/beethoven.sh" >> "$GITHUB_ENV"
+          echo "COMPOSER_BIN=beethoven.sh" >> "$GITHUB_ENV"
 
       - name: composer install
         env:
