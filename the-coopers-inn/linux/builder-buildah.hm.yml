@@ -32,7 +32,7 @@ jobs:
         working-directory: ${{ inputs.pipeline }}
         run: |
           set -euo pipefail
-          find hooks/10-pre-build.d "$PWD"/hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+          find "$HARBOUR_ROOT"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
       - name: buildah bud
         run: |
@@ -49,7 +49,7 @@ jobs:
         working-directory: ${{ inputs.pipeline }}
         run: |
           set -euo pipefail
-          find hooks/20-post-build.d "$PWD"/hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+          find "$HARBOUR_ROOT"/hooks/20-post-build.d hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
       - name: Prepare payload
         run: |
