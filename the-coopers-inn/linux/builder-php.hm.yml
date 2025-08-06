@@ -41,14 +41,18 @@ jobs:
           find hooks/10-pre-build.d "$PIPELINE"/hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
       - name: composer install
+        env:
+          COMPOSER_BIN: ${{ env.COMPOSER_BIN || 'composer' }}
         run: |
           set -euo pipefail
-          composer --working-dir "${{ inputs.pipeline }}" install --no-interaction --no-progress
+          "$COMPOSER_BIN" --working-dir "${{ inputs.pipeline }}" install --no-interaction --no-progress
 
       - name: composer test
+        env:
+          COMPOSER_BIN: ${{ env.COMPOSER_BIN || 'composer' }}
         run: |
           set -euo pipefail
-          composer --working-dir "${{ inputs.pipeline }}" test || true
+          "$COMPOSER_BIN" --working-dir "${{ inputs.pipeline }}" test || true
 
       - name: Post-build hooks
         run: |
