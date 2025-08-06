@@ -29,10 +29,10 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Pre-build hooks
+        working-directory: ${{ inputs.pipeline }}
         run: |
           set -euo pipefail
-          PIPELINE='${{ inputs.pipeline }}'
-          find hooks/10-pre-build.d "$PIPELINE"/hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+          find hooks/10-pre-build.d "$PWD"/hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
       - name: buildah bud
         run: |
@@ -46,10 +46,10 @@ jobs:
           echo "IMAGE_REF=$ref" >> "$GITHUB_OUTPUT"
 
       - name: Post-build hooks
+        working-directory: ${{ inputs.pipeline }}
         run: |
           set -euo pipefail
-          PIPELINE='${{ inputs.pipeline }}'
-          find hooks/20-post-build.d "$PIPELINE"/hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+          find hooks/20-post-build.d "$PWD"/hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
       - name: Prepare payload
         run: |
