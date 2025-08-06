@@ -40,6 +40,14 @@ jobs:
           PIPELINE='${{ inputs.pipeline }}'
           find hooks/10-pre-build.d "$PIPELINE"/hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
+      - name: Select composer binary
+        run: |
+          set -euo pipefail
+          PIPELINE='${{ inputs.pipeline }}'
+          if echo "${files:-}" | grep -qx ".*${PIPELINE}/beethoven.sh"; then
+            echo "COMPOSER_BIN=${PIPELINE}/beethoven.sh" >> "$GITHUB_ENV"
+          fi
+
       - name: composer install
         env:
           COMPOSER_BIN: ${{ env.COMPOSER_BIN || 'composer' }}
