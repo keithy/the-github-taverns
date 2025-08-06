@@ -1,0 +1,70 @@
+#HM trigger="go.mod"
+name: Builder-Go
+on:
+  workflow_dispatch:
+    inputs:
+      pipeline:
+        required: true
+      ref:
+        required: true
+      runner:
+        required: false
+      env:
+        required: false
+jobs:
+  build:
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set env name tech
+        run: |
+          echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+          builder_name="${GITHUB_WORKFLOW%.hm.yml}"
+          {
+            echo "BUILDER=$builder_name"
+            echo "TECH=${builder_name#*-}"
+          } >> "$GITHUB_ENV"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.pipeline }}/go.mod
+
+      - name: Pre-build hooks
+        run: |
+          set -euo pipefail
+          PIPELINE='${{ inputs.pipeline }}'
+          find hooks/10-pre-build.d "$PIPELINE"/hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+
+      - name: go build
+        run: |
+          set -euo pipefail
+          go -C "${{ inputs.pipeline }}" build ./...
+
+      - name: go test
+        run: |
+          set -euo pipefail
+          go -C "${{ inputs.pipeline }}" test ./... -v
+
+      - name: Post-build hooks
+        run: |
+          set -euo pipefail
+          PIPELINE='${{ inputs.pipeline }}'
+          find hooks/20-post-build.d "$PIPELINE"/hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+
+      - name: Prepare payload
+        run: |
+          set -euo pipefail
+          env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
+          sed -i '/^env_json=/d' "$GITHUB_ENV"
+          echo "env_json=$env_json" >> "$GITHUB_ENV"
+
+      - name: Harbour Master Dispatch
+        uses: ./.github/workflows/harbour-master.hm.yml
+        with:
+          pipeline: ${{ inputs.pipeline }}
+          ref: ${{ inputs.ref }}
+          env_json: ${{ env.env_json }}
