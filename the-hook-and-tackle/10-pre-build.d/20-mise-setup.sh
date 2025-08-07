@@ -9,7 +9,7 @@ if [[ -n "$conf" ]]; then
   echo "[mise-setup] using config: $conf"
   if ! command -v mise >/dev/null 2>&1; then
     echo "[mise-setup] installing mise"
-    curl -fsSL https://mise.jdx.dev/install.sh | sh -s -- -y >/dev/null 2>&1 || true
+    curl -fsSL "${MISE_INSTALL_URL:-https://mise.jdx.dev/install.sh}" | sh -s -- -y >/dev/null 2>&1 || true
     export PATH="$HOME/.local/share/mise/bin:$PATH"
     echo "PATH=$HOME/.local/share/mise/bin:$PATH" >> "$GITHUB_ENV"
   fi
