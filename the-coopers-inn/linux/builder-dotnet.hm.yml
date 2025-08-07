@@ -1,3 +1,4 @@
+#BUILD files=/(\.csproj|global\.json|NuGet\.config)/
 ---
 name: Builder-DotNet
 
@@ -77,4 +78,3 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
-

@@ -103,25 +103,50 @@ jobs:
         set -euo pipefail
 
         # Read build metadata headers in the harbour repo:
-        #   #BUILD="Dockerfile"
+        #   #BUILD files=/Dockerfile/ SOME_ENV=/pattern/
         declare -A builders
+        declare -A files_pat
+        declare -A kv_pairs
         while IFS= read -r line; do
           file="${line%%:*}"
           meta_line="${line#*:}"
-          trigger=${meta_line#*#BUILD="}
-          trigger=${trigger%%"*}
-          [[ -n "$trigger" ]] && builders["$file"]="$trigger"
-        done < <(grep -Rno '^#BUILD=".*"' .github/workflows/*-*.yml || true)
+          while read -r kv; do
+            key="${kv%%=*}"; val="${kv#*=}"
+            val="${val%/}"; val="${val#/}"
+            if [[ "$key" == "files" ]]; then
+              files_pat["$file"]="$val"
+            else
+              kv_pairs["$file,$key"]="$val"
+            fi
+          done < <(echo "$meta_line" | sed -n 's/.*#BUILD[[:space:]]\(.*\)$/\1/p' | tr ' ' '\n' | grep -E '^[A-Z0-9_\-]+=/.*(/)?$')
+          builders["$file"]=1
+        done < <(grep -Rno '^#BUILD\b' .github/workflows/*-*.yml || true)
 
         run_builder() {
           local wf="$1"; shift
           gh workflow run "$wf" -f pipeline="$PIPELINE" -f ref="$ref" -f runner="$runner" -f env_json="$env_json"
         }
 
+        matches=()
         for wf in "${!builders[@]}"; do
-          trig="${builders[$wf]}"
-          if [[ "$files" =~ $trig ]]; then
-            run_builder "$wf"
+          ok=1
+          fpat="${files_pat[$wf]}"
+          if [[ -n "$fpat" ]] && ! [[ "$files" =~ $fpat ]]; then ok=0; fi
+          for kv in "${!kv_pairs[@]}"; do
+            [[ "${kv%%,*}" == "$wf" ]] || continue
+            key="${kv#*,}"; want="${kv_pairs[$kv]}"
+            eval cur="\${key}"
+            if ! [[ "$cur" =~ $want ]]; then ok=0; fi
+          done
+          if [[ $ok -eq 1 ]]; then
+            matches+=("$wf")
           fi
         done
+        if [[ ${#matches[@]} -gt 1 ]]; then
+          echo "Error: multiple workflows match: ${matches[*]}" >&2
+          exit 1
+        fi
+        if [[ ${#matches[@]} -eq 1 ]]; then
+          run_builder "${matches[0]}"
+        fi
 
