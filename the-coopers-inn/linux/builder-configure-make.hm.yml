@@ -1,3 +1,4 @@
+#BUILD files=/(configure|Makefile)/
 ---
 name: Builder-Configure-Make
 
