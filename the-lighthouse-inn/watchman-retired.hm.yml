@@ -81,7 +81,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     permissions:
       id-token: write
-      contents: read    steps:
+      contents: read    
+    steps:
     
       - name: checkout
         uses: actions/checkout@v4
@@ -125,7 +126,7 @@ jobs:
           read_vars 'Overides: ' "$PIPELINE/config/.env"           "$PIPELINE/.env"
 
       - name: Inherit base Project
-        if env.INHERITS != ''
+        if: env.INHERITS != ''
         run: |
           # Copy inherited pipeline
           if [ -d "$INHERITS" ]

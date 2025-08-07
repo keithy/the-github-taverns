@@ -1,7 +1,7 @@
 ---
 name: Builder-Mise
 
-true:
+on:
   workflow_dispatch:
     inputs:
       pipeline:
@@ -27,9 +27,9 @@ jobs:
     - name: Import env
       env:
         env_json: "${{ inputs.env_json }}"
-      run: 'echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
-
-        '
+      run: |
+        set -euo pipefail
+        echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
 
     - name: Pre-build hooks
       working-directory: "${{ inputs.pipeline }}"
