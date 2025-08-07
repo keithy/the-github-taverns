@@ -1,0 +1,72 @@
+#BUILD files=/mojo\.toml/
+---
+name: Builder-Mojo
+
+on:
+  workflow_dispatch:
+    inputs:
+      pipeline:
+        required: true
+      ref:
+        required: true
+      runner:
+        required: false
+      env:
+        required: false
+
+jobs:
+  build:
+    runs-on: "${{ inputs.runner || 'ubuntu-24.04' }}"
+
+    steps:
+
+    - uses: actions/checkout@v4
+      with:
+        ref: "${{ inputs.ref }}"
+
+    - name: Import env
+      env:
+        env_json: "${{ inputs.env_json }}"
+      run: |
+        set -euo pipefail
+        echo "$env_json" | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+
+    - name: Pre-build hooks
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+
+    - name: mojo build
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        mojo build
+
+    - name: mojo test
+      if: env.BUILD_TEST_SKIP != 'true'
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        mojo test || true
+
+    - name: Post-build hooks
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        find "$HARBOUR"/hooks/20-post-build.d hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+
+    - name: Prepare payload
+      run: |
+        set -euo pipefail
+        env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
+        sed -i '/^env_json=/d' "$GITHUB_ENV"
+        echo "env_json=$env_json" >> "$GITHUB_ENV"
+
+    - name: Harbour Master Dispatch
+      uses: "./.github/workflows/harbour-master.hm.yml"
+      with:
+        pipeline: "${{ inputs.pipeline }}"
+        ref: "${{ inputs.ref }}"
+        env_json: "${{ env.env_json }}"
+
