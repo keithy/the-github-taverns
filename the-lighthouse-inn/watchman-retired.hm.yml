@@ -11,7 +11,8 @@ jobs:
     name: Get Changed Pipelines
     runs-on: ubuntu-24.04
     outputs:
-      matrix: ${{ steps.spotting.outputs.matrix }}    steps:
+      matrix: ${{ steps.spotting.outputs.matrix }}
+    steps:
 
       - uses: actions/checkout@v4
         with:

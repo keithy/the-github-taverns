@@ -29,9 +29,9 @@ jobs:
     - name: Import env
       env:
         env_json: "${{ inputs.env_json }}"
-      run: 'echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
-
-        '
+      run: |
+        set -euo pipefail
+        echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
 
     - name: Verify hooks (${{ inputs.tech }})
       run: |
