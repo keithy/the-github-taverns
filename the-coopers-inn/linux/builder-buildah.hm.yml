@@ -1,7 +1,7 @@
 ---
 name: Builder-Buildah
 
-on:
+true:
   workflow_dispatch:
     inputs:
       pipeline:
@@ -16,6 +16,7 @@ on:
 jobs:
   build:
     runs-on: "${{ inputs.runner || 'ubuntu-24.04' }}"
+
     steps:
 
     - uses: actions/checkout@v4
@@ -25,7 +26,7 @@ jobs:
     - name: Import env
       env:
         env_json: "${{ inputs.env_json }}"
-      run: 
+      run: |
         set -euo pipefail
         echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
 
@@ -65,3 +66,4 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
+

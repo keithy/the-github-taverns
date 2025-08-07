@@ -1,226 +1,174 @@
+---
 name: Watchman-Linus
- 
-on:
+
+true:
   push:
-    branches:  [ "main", "experimental**" ]
+    branches:
+    - main
+    - experimental**
   pull_request:
-    branches: [ "main", "release" ]
+    branches:
+    - main
+    - release
 
 jobs:
   watching:
     name: Get Changed Pipelines
     runs-on: ubuntu-24.04
     outputs:
-      matrix: ${{ steps.spotting.outputs.matrix }}
+      matrix: "${{ steps.spotting.outputs.matrix }}"
+
     steps:
 
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: "${{ github.event_name == 'pull_request' && 2 || 0 }}"
 
-      - name: Folders changed 4 levels deep
-        id: spotting
-        env: 
-          IS_PR: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-        run: |
-          # Find changed folders 4 levels deep
-          # see .github/specs/folders_changed.spec.sh
+    - name: Folders changed 4 levels deep
+      env:
+        IS_PR: "${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
+      run: |
+        if $IS_PR; then
+          branch=${{ github.base_ref }}
+          start=HEAD^1
+          stop=HEAD
+        else
+          branch=${{ github.ref_name }}
+          start=${{ github.event.before }}
+          stop=${{ github.event.after }}
+        fi
 
-          if $IS_PR
-          then
-            branch=${{ github.base_ref }}
-            start=HEAD^1
-            stop=HEAD
-          else
-            branch=${{ github.ref_name }} 
-            start=${{ github.event.before }} 
-            stop=${{ github.event.after }} 
-          fi
+        changed="$(git diff --name-only -r $start $stop | sed -rn 's#^([^/]+/[^/]+/[^/]+/[^/]+)/.*#\1#p' | sort -u | xargs)"
 
-          changed="$(git diff --name-only -r $start $stop | sed -rn 's#^([^/]+/[^/]+/[^/]+/[^/]+)/.*#\1#p' | sort -u | xargs)"
+        find_var() { local name="$1"; shift 2; local def="$1"; shift 2; local f v; for f in "$@"; do v="$(sed -n "/^$name=/ { s/^$name=//; p ; q }" "$f" | xargs)"; [[ -n "$v" ]] && echo "$v" && return 0; done; echo "$def"; }
 
-          function find_var () # search for a named variable value from any number of .env files or use default
-          {
-            local name="$1" ; shift 2
-            local default="$1" ; shift 2
-            local env_file value
-            
-            for env_file in "$@"
-            do
-              value="$(sed -n "/^$name=/ { s/^$name=//; p ; q }" "$env_file" | xargs)"
-              [[ -n "$value" ]] && echo "$value" && return 0
-            done
+        matrix=$(for PIPELINE in $changed; do
+          branch_config="$(find_var BRANCH_CONFIG default: "${branch%%/*}.branch.env")"
+          config="$(find_var CONFIG default: 'default.env' \
+                                 search: $PIPELINE/.env           $PIPELINE/config/.env \
+                                         $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
+                                         config/$branch_config)"
+          runner="$(find_var RUNNER default: 'ubuntu-24.04' \
+                                 search:  $PIPELINE/.env           $PIPELINE/config/.env \
+                                          $PIPELINE/$config        $PIPELINE/config/$config \
+                                          $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
+                                          config/$branch_config)"
+          echo "{\"pipeline\": \"$PIPELINE\", \"runner\": \"$runner\", \"config\": \"$config\", \"branch\": \"$branch\" }"
+        done | jq -s .)
 
-            echo "$default"
-          }
-
-          # matrix [ { "pipeline": "<type>/<a>/<b>/<c>", 
-                       "runner"  : "$runner", "config": "dry-run.env", "branch": "main" } ... ]
-
-          matrix=$(for PIPELINE in $changed
-          do
-            branch_config="$(find_var BRANCH_CONFIG default: "${branch%%/*}.branch.env")"
-            config="$(find_var CONFIG default: 'default.env' \
-                                      search: $PIPELINE/.env           $PIPELINE/config/.env \
-                                              $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
-                                              config/$branch_config)"
-            runner="$(find_var RUNNER default: 'none' \
-                                      search:  $PIPELINE/.env           $PIPELINE/config/.env \
-                                               $PIPELINE/$config        $PIPELINE/config/$config \
-                                               $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
-                                               config/$branch_config)"
-            echo "{\"pipeline\": \"$PIPELINE\", \"runner\": \"$runner\", \"config\": \"$config\", \"branch\": \"$branch\" }"
-          done | jq -s .)
-
-          echo "matrix=$matrix" | tee -a $GITHUB_OUTPUT
-
+        echo "matrix=$matrix" | tee -a $GITHUB_OUTPUT
   pipeline:
     needs: watching
     strategy:
-      matrix: ${{ fromJson(needs.watching.outputs.matrix) }}
-    runs-on: ${{ matrix.runner }}
+      matrix: "${{ fromJson(needs.watching.outputs.matrix) }}"
+    runs-on: "${{ matrix.runner }}"
     permissions:
       id-token: write
-      contents: read    
+      contents: read
+
     steps:
-    
-      - name: checkout
-        uses: actions/checkout@v4
 
-      - name: initialize
-        env:
-          BRANCH: ${{ matrix.branch }}
-          CONFIG: ${{ matrix.config }}
-          PIPELINE: ${{ matrix.pipeline }}
-        run: |
-          # Initialize Environment
+    - name: checkout
+      uses: actions/checkout@v4
 
-          cat <<"VARS" | tee -a $GITHUB_ENV
-          BRANCH=$BRANCH
-          BRANCH_CONFIG=${BRANCH%%/*}.branch.env
-          CONFIG=$CONFIG
-          PIPELINE=$PIPELINE
-          files="$(ls $PIPELINE || echo '')"
-          VARS
-          
-          function read_vars ()
-          {
-            echo "Reading $@" ; shift
-            for cfg in "$@"
-            do
-              [[ ! -f "$cfg" ]] && return 0
-              echo " $cfg"
-              while IFS='=' read -r key value
-              do
-                if [[ "$key" != '#'* && -n "$key" ]]
-                then
-                  echo "$key=$value" >> $GITHUB_ENV
-                fi 
-              done < "$cfg"
-            done
-          }
-        
-          read_vars 'Global:   ' "config/$BRANCH_CONFIG"           "config/$CONFIG"
-          read_vars 'Project:  ' "$PIPELINE/config/$CONFIG"        "$PIPELINE/$CONFIG"
-          read_vars 'Branch:   ' "$PIPELINE/config/$BRANCH_CONFIG" "$PIPELINE/$BRANCH_CONFIG"
-          read_vars 'Overides: ' "$PIPELINE/config/.env"           "$PIPELINE/.env"
+    - name: initialize
+      env:
+        BRANCH: "${{ matrix.branch }}"
+        PIPELINE: "${{ matrix.pipeline }}"
+      run: |
+        cat <<"VARS" | tee -a $GITHUB_ENV
+        BRANCH=$BRANCH
+        BRANCH_CONFIG=${BRANCH%%/*}.branch.env
+        HARBOUR=$GITHUB_WORKSPACE
+        HARBOUR_NAME=${HARBOUR##*/}
+        PIPELINE=$PIPELINE
+        files="$(ls $PIPELINE || echo '')"
+        VARS
 
-      - name: Inherit base Project
-        if: env.INHERITS != ''
-        run: |
-          # Copy inherited pipeline
-          if [ -d "$INHERITS" ]
-          then
-            cp -rvn $INHERITS/. $PIPELINE
-          else
-            echo "Pipeline folder ($INHERITS) set by INHERITS does not exist"
-          fi
-      
-      - name: Pre-build hooks
-        id: pre-build-hooks
-        run: |
-          set -euo pipefail
-          for dir in \
-            ".github/hooks/pre-build.d" \
-            "$PIPELINE/hooks/pre-build.d"
-          do
-            if [[ -d "$dir" ]]; then
-              for f in "$dir"/*; do
-                [[ -f "$f" && -x "$f" ]] || continue
-                echo "running: $f"
-                "$f"
-              done
-            else
-              echo "no pre-build hooks found at $dir"
-            fi
-          done
-        
-      - name: Build Dockerfile (docker)
-        if: contains(env.files, 'Dockerfile')
-        run: |
-          set -euo pipefail
-          IMAGE_TAG="${IMAGE_TAG:-${BRANCH##*/}}"
-          REGISTRY="${REGISTRY:-}"
-          IMAGE_PATH="${IMAGE_PATH:-$(basename "$(dirname "$PIPELINE")")/$(basename "$PIPELINE")}"
-          ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
-          echo "Building $ref from $PIPELINE/Dockerfile"
-          docker build -t "$ref" "$PIPELINE"
-          echo "IMAGE_REF=$ref" >> "$GITHUB_ENV"
+    - name: Inherit base Project
+      if: env.INHERITS != ''
+      run: |
+        # Copy inherited pipeline
+        if [ -d "$INHERITS" ]
+        then
+          cp -rvn $INHERITS/. $PIPELINE
+        else
+          echo "Pipeline folder ($INHERITS) set by INHERITS does not exist"
+        fi
 
-      - name: Build Containerfile (buildah)
-        if: contains(env.files, 'Containerfile')
-        run: |
-          set -euo pipefail
-          IMAGE_TAG="${IMAGE_TAG:-${BRANCH##*/}}"
-          REGISTRY="${REGISTRY:-}"
-          IMAGE_PATH="${IMAGE_PATH:-$(basename "$(dirname "$PIPELINE")")/$(basename "$PIPELINE")}"
-          ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
-          echo "Building $ref from $PIPELINE/Containerfile"
-          buildah bud -t "$ref" -f "$PIPELINE/Containerfile" "$PIPELINE"
-          echo "IMAGE_REF=$ref" >> "$GITHUB_ENV"
+    - name: Pre-build hooks
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-      - name: Build with configure/make
-        if: contains(env.files, 'configure')
-        run: |
-          set -euo pipefail
-          pushd "$PIPELINE" >/dev/null
-          chmod +x ./configure || true
-          ./configure
-          make -j"$(nproc)"
-          popd >/dev/null
+    - name: Build Dockerfile (docker)
+      if: contains(env.files, 'Dockerfile')
+      run: |
+        set -euo pipefail
+        IMAGE_TAG="${IMAGE_TAG:-${BRANCH##*/}}"
+        REGISTRY="${REGISTRY:-}"
+        IMAGE_PATH="${IMAGE_PATH:-$(basename "$(dirname "$PIPELINE")")/$(basename "$PIPELINE")}"
+        ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
+        echo "Building $ref from $PIPELINE/Dockerfile"
+        docker build -t "$ref" "$PIPELINE"
+        echo "IMAGE_REF=$ref" >> "$GITHUB_ENV"
 
-      - name: Build with Maven
-        if: contains(env.files, 'pom.xml')
-        run: |
-          set -euo pipefail
-          mvn -f "$PIPELINE/pom.xml" -B -U -ntp package
+    - name: Build Containerfile (buildah)
+      if: contains(env.files, 'Containerfile')
+      run: |
+        set -euo pipefail
+        IMAGE_TAG="${IMAGE_TAG:-${BRANCH##*/}}"
+        REGISTRY="${REGISTRY:-}"
+        IMAGE_PATH="${IMAGE_PATH:-$(basename "$(dirname "$PIPELINE")")/$(basename "$PIPELINE")}"
+        ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
+        echo "Building $ref from $PIPELINE/Containerfile"
+        buildah bud -t "$ref" -f "$PIPELINE/Containerfile" "$PIPELINE"
+        echo "IMAGE_REF=$ref" >> "$GITHUB_ENV"
 
-      - name: Build with Node (npm)
-        if: contains(env.files, 'package.json')
-        run: |
-          set -euo pipefail
-          npm --prefix "$PIPELINE" ci
-          npm --prefix "$PIPELINE" run build --if-present
+    - name: Build with configure/make
+      if: contains(env.files, 'configure')
+      run: |
+        set -euo pipefail
+        pushd "$PIPELINE" >/dev/null
+        chmod +x ./configure || true
+        ./configure
+        make -j"$(nproc)"
+        popd >/dev/null
 
-      - name: Build with Docker Compose
-        if: contains(env.files, 'docker-compose.yml')
-        run: |
-          set -euo pipefail
-          docker compose -f "$PIPELINE/docker-compose.yml" build
+    - name: Build with Maven
+      if: contains(env.files, 'pom.xml')
+      run: |
+        set -euo pipefail
+        mvn -f "$PIPELINE/pom.xml" -B -U -ntp package
 
-      - name: Build with Mise
-        if: contains(env.files, 'mise.toml')
-        run: |
-          set -euo pipefail
-          mise run -C "$PIPELINE" build
+    - name: Build with Node (npm)
+      if: contains(env.files, 'package.json')
+      run: |
+        set -euo pipefail
+        npm --prefix "$PIPELINE" ci
+        npm --prefix "$PIPELINE" run build --if-present
 
-      - name: Build .NET
-        if: contains(env.files, '.csproj') || contains(env.files, 'global.json') || contains(env.files, 'NuGet.config')
-        run: |
-          set -euo pipefail
-          pushd "$PIPELINE" >/dev/null
-          dotnet restore
-          dotnet build -c Release
-          dotnet test -c Release --no-build || true
-          popd >/dev/null
-        
+    - name: Build with Docker Compose
+      if: contains(env.files, 'docker-compose.yml')
+      run: |
+        set -euo pipefail
+        docker compose -f "$PIPELINE/docker-compose.yml" build
+
+    - name: Build with Mise
+      if: contains(env.files, 'mise.toml')
+      run: |
+        set -euo pipefail
+        mise run -C "$PIPELINE" build
+
+    - name: Build .NET
+      if: contains(env.files, '.csproj') || contains(env.files, 'global.json') ||
+        contains(env.files, 'NuGet.config')
+      run: |
+        set -euo pipefail
+        pushd "$PIPELINE" >/dev/null
+        dotnet restore
+        dotnet build -c Release
+        dotnet test -c Release --no-build || true
+        popd >/dev/null
+
