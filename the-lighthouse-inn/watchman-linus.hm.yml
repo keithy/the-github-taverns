@@ -102,16 +102,16 @@ jobs:
       run: |
         set -euo pipefail
 
-        # Read builder metadata headers in the harbour repo:
-        #   #HM trigger="Dockerfile"
+        # Read build metadata headers in the harbour repo:
+        #   #BUILD="Dockerfile"
         declare -A builders
         while IFS= read -r line; do
           file="${line%%:*}"
           meta_line="${line#*:}"
-          trigger=${meta_line#*trigger="}
+          trigger=${meta_line#*#BUILD="}
           trigger=${trigger%%"*}
           [[ -n "$trigger" ]] && builders["$file"]="$trigger"
-        done < <(grep -Rno '^#HM .*trigger=".*"' .github/workflows/builder-*.yml || true)
+        done < <(grep -Rno '^#BUILD=".*"' .github/workflows/*-*.yml || true)
 
         run_builder() {
           local wf="$1"; shift
