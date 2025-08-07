@@ -49,6 +49,7 @@ jobs:
         go -C "${{ inputs.pipeline }}" build ./...
 
     - name: go test
+      if: env.BUILD_TEST_SKIP != 'true'
       run: |
         set -euo pipefail
         go -C "${{ inputs.pipeline }}" test ./... -v

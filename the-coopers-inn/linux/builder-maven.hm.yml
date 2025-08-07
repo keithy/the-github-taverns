@@ -47,6 +47,7 @@ jobs:
         mvn -f "${{ inputs.pipeline }}/pom.xml" -B -U -ntp package
 
     - name: mvn test
+      if: env.BUILD_TEST_SKIP != 'true'
       run: |
         set -euo pipefail
         mvn -f "${{ inputs.pipeline }}/pom.xml" -B -U -ntp -DskipTests=false test

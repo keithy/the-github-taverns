@@ -51,6 +51,7 @@ jobs:
         popd >/dev/null
 
     - name: dotnet test
+      if: env.BUILD_TEST_SKIP != 'true'
       run: |
         set -euo pipefail
         pushd "${{ inputs.pipeline }}" >/dev/null

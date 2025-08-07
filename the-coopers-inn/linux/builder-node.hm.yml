@@ -47,6 +47,7 @@ jobs:
         npm --prefix "${{ inputs.pipeline }}" run build --if-present
 
     - name: npm test
+      if: env.BUILD_TEST_SKIP != 'true'
       run: |
         set -euo pipefail
         npm --prefix "${{ inputs.pipeline }}" test --if-present
