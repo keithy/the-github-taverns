@@ -1,5 +1,6 @@
 ---
 name: Watchman-Bob
+
 true:
   push:
     branches:
@@ -9,16 +10,18 @@ true:
     branches:
     - main
     - release
+
 jobs:
   watching:
     name: Get Changed Pipelines
     runs-on: ubuntu-24.04
     outputs:
-      matrix: "${{ steps.spotting.outputs.matrix }}"
-    steps:
+      matrix: "${{ steps.spotting.outputs.matrix }}"    steps:
+
     - uses: actions/checkout@v4
       with:
         fetch-depth: "${{ github.event_name == 'pull_request' && 2 || 0 }}"
+
     - name: Folders changed 4 levels deep
       id: spotting
       env:
@@ -61,9 +64,12 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
     steps:
+
     - name: checkout
       uses: actions/checkout@v4
+
     - name: initialize
       env:
         BRANCH: "${{ matrix.branch }}"
@@ -72,23 +78,25 @@ jobs:
         cat <<"VARS" | tee -a $GITHUB_ENV
         BRANCH=$BRANCH
         BRANCH_CONFIG=${BRANCH%%/*}.branch.env
-        HARBOUR_ROOT=$GITHUB_WORKSPACE
-        HARBOUR_NAME=${HARBOUR_ROOT##*/}
+        HARBOUR=$GITHUB_WORKSPACE
+        HARBOUR_NAME=${HARBOUR##*/}
         PIPELINE=$PIPELINE
         files="$(ls $PIPELINE || echo '')"
         VARS
+
     - name: Prepare payload
       run: |
         set -euo pipefail
         env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
         sed -i '/^env_json=/d' "$GITHUB_ENV"
         echo "env_json=$env_json" >> "$GITHUB_ENV"
+
     - name: Metadata-driven dispatch
       env:
         GH_TOKEN: "${{ github.token }}"
+        env_json: "${{ steps.prepare.outputs.env_json }}"
         ref: "${{ github.sha }}"
         runner: "${{ matrix.runner }}"
-        env_json: "${{ steps.prepare.outputs.env_json }}"
       run: |
         set -euo pipefail
 
@@ -114,3 +122,4 @@ jobs:
             run_builder "$wf"
           fi
         done
+

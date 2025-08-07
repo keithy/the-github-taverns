@@ -1,5 +1,6 @@
-#HM trigger="docker-compose.yml"
+---
 name: Builder-Compose
+
 on:
   workflow_dispatch:
     inputs:
@@ -11,51 +12,49 @@ on:
         required: false
       env:
         required: false
+
 jobs:
   build:
-    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    runs-on: "${{ inputs.runner || 'ubuntu-24.04' }}"
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
 
-      - name: Import env
-        run: |
-          echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
-          builder_name="${GITHUB_WORKFLOW%.hm.yml}"
-          {
-            echo "BUILDER=$builder_name"
-            echo "TECH=${builder_name#*-}"
-          } >> "$GITHUB_ENV"
+    - uses: actions/checkout@v4
+      with:
+        ref: "${{ inputs.ref }}"
 
-      - name: Pre-build hooks
-        run: |
-          set -euo pipefail
-          PIPELINE='${{ inputs.pipeline }}'
-          find hooks/10-pre-build.d "$PIPELINE"/hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+    - name: Import env
+      env:
+        env_json: "${{ inputs.env_json }}"
+      run: 'echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
 
-      - name: docker compose build
-        run: |
-          set -euo pipefail
-          docker compose -f "${{ inputs.pipeline }}/docker-compose.yml" build
+    - name: Pre-build hooks
+      run: |
+        set -euo pipefail
+        find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+      working-directory: "${{ inputs.pipeline }}"
 
-      - name: Post-build hooks
-        run: |
-          set -euo pipefail
-          PIPELINE='${{ inputs.pipeline }}'
-          find hooks/20-post-build.d "$PIPELINE"/hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+    - name: docker compose build
+      run: |
+        set -euo pipefail
+        docker compose -f "${{ inputs.pipeline }}/docker-compose.yml" build
 
-      - name: Prepare payload
-        run: |
-          set -euo pipefail
-          env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
-          sed -i '/^env_json=/d' "$GITHUB_ENV"
-          echo "env_json=$env_json" >> "$GITHUB_ENV"
+    - name: Post-build hooks
+      run: |
+        set -euo pipefail
+        find "$HARBOUR"/hooks/20-post-build.d hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+      working-directory: "${{ inputs.pipeline }}"
 
-      - name: Harbour Master Dispatch
-        # workflow path conforms to .github/workflows/<worker>.hm.yml
-        uses: ./.github/workflows/harbour-master.hm.yml
-        with:
-          pipeline: ${{ inputs.pipeline }}
-          ref: ${{ inputs.ref }}
-          env_json: ${{ env.env_json }}
+    - name: Prepare payload
+      run: |
+        set -euo pipefail
+        env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
+        sed -i '/^env_json=/d' "$GITHUB_ENV"
+        echo "env_json=$env_json" >> "$GITHUB_ENV"
+
+    - name: Harbour Master Dispatch
+      uses: "./.github/workflows/harbour-master.hm.yml"
+      with:
+        pipeline: "${{ inputs.pipeline }}"
+        ref: "${{ inputs.ref }}"
+        env_json: "${{ env.env_json }}"
+

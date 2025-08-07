@@ -1,3 +1,4 @@
+---
 name: Harbour-Master
 
 on:
@@ -20,37 +21,40 @@ jobs:
   dispatch:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
 
-      - name: Import env
-        env:
-          env_json: ${{ inputs.env_json }}
-        run: |
-          echo "$env_json" | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+    - uses: actions/checkout@v4
+      with:
+        ref: "${{ inputs.ref }}"
 
-      - name: Verify hooks (${{ inputs.tech }})
-        run: |
-          set -euo pipefail
-          find hooks/30-verify.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+    - name: Import env
+      env:
+        env_json: "${{ inputs.env_json }}"
+      run: 'echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
 
-      - name: Pre-publish hooks (${{ inputs.tech }})
-        run: |
-          set -euo pipefail
-          find hooks/40-pre-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+        '
 
-      - name: Publish hooks (${{ inputs.tech }})
-        run: |
-          set -euo pipefail
-          find hooks/50-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+    - name: Verify hooks (${{ inputs.tech }})
+      run: |
+        set -euo pipefail
+        find hooks/30-verify.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
 
-      - name: Post-publish hooks (${{ inputs.tech }})
-        run: |
-          set -euo pipefail
-          find hooks/60-post-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+    - name: Pre-publish hooks (${{ inputs.tech }})
+      run: |
+        set -euo pipefail
+        find hooks/40-pre-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
 
-      - name: Report hooks (${{ inputs.tech }})
-        run: |
-          set -euo pipefail
-          find hooks/70-report.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+    - name: Publish hooks (${{ inputs.tech }})
+      run: |
+        set -euo pipefail
+        find hooks/50-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+
+    - name: Post-publish hooks (${{ inputs.tech }})
+      run: |
+        set -euo pipefail
+        find hooks/60-post-publish.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+
+    - name: Report hooks (${{ inputs.tech }})
+      run: |
+        set -euo pipefail
+        find hooks/70-report.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null
+
