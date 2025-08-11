@@ -9,6 +9,33 @@ jobs:
   run-lighthouse-keeper:
     runs-on: ubuntu-latest
     steps:
+      - name: Set up cache for mise
+        id: cache-mise
+        uses: actions/cache@v3
+        with:
+          path: ~/.local/share/mise/bin
+          key: ${{ runner.os }}-mise-${{ hashFiles('mise.toml') }}
+          restore-keys:
+            ${{ runner.os }}-mise-
+      - name: install mise
+        if: steps.cache-mise.outputs.cache-hit != 'true'
+        run: curl -fsSL https://mise.jdx.gg/install.sh | sh
+        shell: bash
+
+      - name: Set up cache for nickel
+        id: cache-nickel
+        uses: actions/cache@v3
+        with:
+          path: ~/.local/share/mise/bin/nickel
+          key: ${{ runner.os }}-nickel
+          restore-keys:
+            ${{ runner.os }}-nickel-
+      - name: install nickel
+        if: steps.cache-nickel.outputs.cache-hit != 'true'
+        run: | 
+          mise tools install
+          mise tools use -g
+
       - name: Checkout repository
         uses: actions/checkout@v3
 
