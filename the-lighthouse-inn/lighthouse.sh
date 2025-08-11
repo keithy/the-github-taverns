@@ -9,6 +9,7 @@
 set -euo pipefail
 
 # Find all projects with external resource definitions.
+echo "Finding external resource definitions..."
 NICKEL_FILES=$(find . -name "*.ncl")
 
 # Combine the configurations into a single config.
