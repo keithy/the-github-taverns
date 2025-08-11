@@ -13,14 +13,16 @@ jobs:
         id: cache-mise
         uses: actions/cache@v3
         with:
-          path: ~/.local/share/mise/bin
-          key: ${{ runner.os }}-mise-${{ hashFiles('mise.toml') }}
+          path: ~/.local/share/mise
+          key: ${{ runner.os }}-mise
           restore-keys:
             ${{ runner.os }}-mise-
-      - name: install mise
+
+      - name: Install mise
         if: steps.cache-mise.outputs.cache-hit != 'true'
-        run: curl -fsSL https://mise.jdx.gg/install.sh | sh
+        run: curl -fsSL https://mise.jdx.gg/install.sh | sh && echo "$HOME/.local/share/mise/bin" >> $GITHUB_PATH
         shell: bash
+
 
       - name: Set up cache for nickel
         id: cache-nickel
