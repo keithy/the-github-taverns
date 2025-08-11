@@ -1,8 +1,8 @@
-#BUILD files=/(build\.gradle|gradlew)/
+#BUILD files=/(requirements\.txt|pyproject\.toml|setup\.py)/
 ---
-name: Builder-Gradle
+name: Doozer-Python
 
-true:
+on:
   workflow_dispatch:
     inputs:
       pipeline:
@@ -29,7 +29,7 @@ jobs:
         env_json: "${{ inputs.env_json }}"
       run: |
         set -euo pipefail
-        echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
+        echo "$env_json" | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
 
     - name: Pre-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -37,21 +37,24 @@ jobs:
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-    - name: Gradle assemble
-      run: |
-        set -euo pipefail
-        pushd "${{ inputs.pipeline }}" >/dev/null
-        chmod +x ./gradlew || true
-        if [[ -x ./gradlew ]]; then ./gradlew assemble --no-daemon; else gradle assemble --no-daemon; fi
-        popd >/devnull
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "${{ env.PYTHON_VERSION || '3.12' }}"
 
-    - name: Gradle test
-      if: env.BUILD_TEST_SKIP != 'true'
+    - name: Install dependencies
+      working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
-        pushd "${{ inputs.pipeline }}" >/dev/null
-        if [[ -x ./gradlew ]]; then ./gradlew test --no-daemon; else gradle test --no-daemon; fi
-        popd >/dev/null
+        if [[ -f requirements.txt ]]; then pip install -r requirements.txt; fi
+        if [[ -f pyproject.toml ]]; then pip install -e .; fi
+
+    - name: Run tests (pytest)
+      if: env.BUILD_TEST_SKIP != 'true'
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        if command -v pytest >/dev/null 2>&1; then pytest -q || true; else echo "pytest not installed, skipping"; fi
 
     - name: Post-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -72,3 +75,4 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
+

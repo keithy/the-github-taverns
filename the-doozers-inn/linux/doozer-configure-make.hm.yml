@@ -1,8 +1,8 @@
-#BUILD files=/go\.mod/
+#BUILD files=/(configure|Makefile)/
 ---
-name: Builder-Go
+name: Doozer-Configure-Make
 
-on:
+true:
   workflow_dispatch:
     inputs:
       pipeline:
@@ -24,19 +24,12 @@ jobs:
       with:
         ref: "${{ inputs.ref }}"
 
-    - name: Set env name tech
+    - name: Import env
+      env:
+        env_json: "${{ inputs.env_json }}"
       run: |
-        echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
-        builder_name="${GITHUB_WORKFLOW%.hm.yml}"
-        {
-          echo "BUILDER=$builder_name"
-          echo "TECH=${builder_name#*-}"
-        } >> "$GITHUB_ENV"
-
-    - name: Setup Go
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: "${{ inputs.pipeline }}/go.mod"
+        set -euo pipefail
+        echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
 
     - name: Pre-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -44,16 +37,14 @@ jobs:
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-    - name: go build
+    - name: configure && make
       run: |
         set -euo pipefail
-        go -C "${{ inputs.pipeline }}" build ./...
-
-    - name: go test
-      if: env.BUILD_TEST_SKIP != 'true'
-      run: |
-        set -euo pipefail
-        go -C "${{ inputs.pipeline }}" test ./... -v
+        pushd "${{ inputs.pipeline }}" >/dev/null
+        chmod +x ./configure || true
+        ./configure
+        make -j"$(nproc)"
+        popd >/dev/null
 
     - name: Post-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -74,3 +65,4 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
+

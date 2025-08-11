@@ -1,5 +1,6 @@
-
-name: Builder-Compose
+#BUILD files=/package\.json/
+---
+name: Doozer-Node
 
 on:
   workflow_dispatch:
@@ -30,22 +31,33 @@ jobs:
         set -euo pipefail
         echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
 
+    - name: npm ci
+      run: |
+        set -euo pipefail
+        npm --prefix "${{ inputs.pipeline }}" ci
+
     - name: Pre-build hooks
+      working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
-      working-directory: "${{ inputs.pipeline }}"
 
-    - name: docker compose build
+    - name: npm build
       run: |
         set -euo pipefail
-        docker compose -f "${{ inputs.pipeline }}/docker-compose.yml" build
+        npm --prefix "${{ inputs.pipeline }}" run build --if-present
+
+    - name: npm test
+      if: env.BUILD_TEST_SKIP != 'true'
+      run: |
+        set -euo pipefail
+        npm --prefix "${{ inputs.pipeline }}" test --if-present
 
     - name: Post-build hooks
+      working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
         find "$HARBOUR"/hooks/20-post-build.d hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
-      working-directory: "${{ inputs.pipeline }}"
 
     - name: Prepare payload
       run: |
@@ -60,4 +72,3 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
-

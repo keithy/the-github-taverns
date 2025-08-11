@@ -1,8 +1,8 @@
-#BUILD files=/mojo\.toml/
+#BUILD files=/(build\.gradle|gradlew)/
 ---
-name: Builder-Mojo
+name: Doozer-Gradle
 
-on:
+true:
   workflow_dispatch:
     inputs:
       pipeline:
@@ -29,7 +29,7 @@ jobs:
         env_json: "${{ inputs.env_json }}"
       run: |
         set -euo pipefail
-        echo "$env_json" | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+        echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
 
     - name: Pre-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -37,18 +37,21 @@ jobs:
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-    - name: mojo build
-      working-directory: "${{ inputs.pipeline }}"
+    - name: Gradle assemble
       run: |
         set -euo pipefail
-        mojo build
+        pushd "${{ inputs.pipeline }}" >/dev/null
+        chmod +x ./gradlew || true
+        if [[ -x ./gradlew ]]; then ./gradlew assemble --no-daemon; else gradle assemble --no-daemon; fi
+        popd >/devnull
 
-    - name: mojo test
+    - name: Gradle test
       if: env.BUILD_TEST_SKIP != 'true'
-      working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
-        mojo test || true
+        pushd "${{ inputs.pipeline }}" >/dev/null
+        if [[ -x ./gradlew ]]; then ./gradlew test --no-daemon; else gradle test --no-daemon; fi
+        popd >/dev/null
 
     - name: Post-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -69,4 +72,3 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
-

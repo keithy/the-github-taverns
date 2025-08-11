@@ -1,6 +1,6 @@
-#BUILD files=/Dockerfile/
+#BUILD files=/mojo\.toml/
 ---
-name: Builder-Docker
+name: Doozer-Mojo
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
         env_json: "${{ inputs.env_json }}"
       run: |
         set -euo pipefail
-        echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
+        echo "$env_json" | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
 
     - name: Pre-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -37,17 +37,18 @@ jobs:
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-    - name: Build image
-      id: build
+    - name: mojo build
+      working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
-        PIPELINE="${{ inputs.pipeline }}"
-        IMAGE_TAG="${IMAGE_TAG:-${GITHUB_REF_NAME}}"
-        REGISTRY="${REGISTRY:-}"
-        IMAGE_PATH="${IMAGE_PATH:-$(basename "$(dirname "$PIPELINE")")/$(basename "$PIPELINE")}"
-        ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
-        docker build -t "$ref" "$PIPELINE"
-        echo "IMAGE_REF=$ref" >> "$GITHUB_OUTPUT"
+        mojo build
+
+    - name: mojo test
+      if: env.BUILD_TEST_SKIP != 'true'
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        mojo test || true
 
     - name: Post-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -68,3 +69,4 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
+

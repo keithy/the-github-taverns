@@ -1,6 +1,6 @@
-#BUILD files=/composer\.json/
+#BUILD files=/mise\.toml/
 ---
-name: Builder-PHP
+name: Doozer-Mise
 
 on:
   workflow_dispatch:
@@ -13,6 +13,8 @@ on:
         required: false
       env:
         required: false
+      task:
+        required: false
 
 jobs:
   build:
@@ -24,20 +26,12 @@ jobs:
       with:
         ref: "${{ inputs.ref }}"
 
-    - name: Set env name tech
+    - name: Import env
+      env:
+        env_json: "${{ inputs.env_json }}"
       run: |
-        echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
-        builder_name="${GITHUB_WORKFLOW%.hm.yml}"
-        {
-          echo "BUILDER=$builder_name"
-          echo "TECH=${builder_name#*-}"
-        } >> "$GITHUB_ENV"
-
-    - name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: "${{ env.PHP_VERSION || '8.2' }}"
-        tools: composer
+        set -euo pipefail
+        echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
 
     - name: Pre-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -45,26 +39,15 @@ jobs:
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-    - name: Select composer binary
-      run: echo "COMPOSER_BIN=beethoven.sh" >> "$GITHUB_ENV"
-      if: contains(env.files, 'beethoven.sh')
-
-    - name: composer install
-      env:
-        COMPOSER_BIN: "${{ env.COMPOSER_BIN || 'composer' }}"
-      working-directory: "${{ inputs.pipeline }}"
+    - name: mise run
       run: |
         set -euo pipefail
-        "$COMPOSER_BIN" install --no-interaction --no-progress
-
-    - name: composer test
-      if: env.BUILD_TEST_SKIP != 'true'
-      env:
-        COMPOSER_BIN: "${{ env.COMPOSER_BIN || 'composer' }}"
-      working-directory: "${{ inputs.pipeline }}"
-      run: |
-        set -euo pipefail
-        "$COMPOSER_BIN" test || true
+        task="${{ inputs.task }}"
+        if [[ -n "$task" ]]; then
+          mise run -C "${{ inputs.pipeline }}" "$task"
+        else
+          mise run -C "${{ inputs.pipeline }}" build
+        fi
 
     - name: Post-build hooks
       working-directory: "${{ inputs.pipeline }}"

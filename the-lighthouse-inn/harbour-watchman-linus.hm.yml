@@ -1,15 +1,8 @@
 ---
-name: Watchman-Bob
+name: Watchman-Linus
 
 on:
-  push:
-    branches:
-    - main
-    - experimental**
-  pull_request:
-    branches:
-    - main
-    - release
+  workflow_dispatch:
 
 jobs:
   watching:
@@ -104,7 +97,7 @@ jobs:
 
         # Read build metadata headers in the harbour repo:
         #   #BUILD files=/Dockerfile/ SOME_ENV=/pattern/
-        declare -A builders
+        declare -A doozers
         declare -A files_pat
         declare -A kv_pairs
         while IFS= read -r line; do
@@ -119,16 +112,16 @@ jobs:
               kv_pairs["$file,$key"]="$val"
             fi
           done < <(echo "$meta_line" | sed -n 's/.*#BUILD[[:space:]]\(.*\)$/\1/p' | tr ' ' '\n' | grep -E '^[A-Z0-9_\-]+=/.*(/)?$')
-          builders["$file"]=1
+          doozers["$file"]=1
         done < <(grep -Rno '^#BUILD\b' .github/workflows/*-*.yml || true)
 
-        run_builder() {
+        run_doozer() {
           local wf="$1"; shift
           gh workflow run "$wf" -f pipeline="$PIPELINE" -f ref="$ref" -f runner="$runner" -f env_json="$env_json"
         }
 
         matches=()
-        for wf in "${!builders[@]}"; do
+        for wf in "${!doozers[@]}"; do
           ok=1
           fpat="${files_pat[$wf]}"
           if [[ -n "$fpat" ]] && ! [[ "$files" =~ $fpat ]]; then ok=0; fi
@@ -147,6 +140,6 @@ jobs:
           exit 1
         fi
         if [[ ${#matches[@]} -eq 1 ]]; then
-          run_builder "${matches[0]}"
+          run_doozer "${matches[0]}"
         fi
 

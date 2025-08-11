@@ -1,6 +1,6 @@
-#BUILD files=/package\.json/
+#BUILD files=/(Gemfile|gems\.rb)/
 ---
-name: Builder-Node
+name: Doozer-Ruby
 
 on:
   workflow_dispatch:
@@ -29,12 +29,7 @@ jobs:
         env_json: "${{ inputs.env_json }}"
       run: |
         set -euo pipefail
-        echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
-
-    - name: npm ci
-      run: |
-        set -euo pipefail
-        npm --prefix "${{ inputs.pipeline }}" ci
+        echo "$env_json" | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
 
     - name: Pre-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -42,16 +37,18 @@ jobs:
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-    - name: npm build
+    - name: bundle install
+      working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
-        npm --prefix "${{ inputs.pipeline }}" run build --if-present
+        bundle install --jobs 4 --retry 3
 
-    - name: npm test
+    - name: bundle exec rake test
       if: env.BUILD_TEST_SKIP != 'true'
+      working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
-        npm --prefix "${{ inputs.pipeline }}" test --if-present
+        bundle exec rake test || true
 
     - name: Post-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -72,3 +69,4 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
+

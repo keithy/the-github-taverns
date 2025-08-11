@@ -1,6 +1,6 @@
-#BUILD files=/Cargo\.toml/
+#BUILD files=/(\.csproj|global\.json|NuGet\.config)/
 ---
-name: Builder-Rust
+name: Doozer-DotNet
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
         env_json: "${{ inputs.env_json }}"
       run: |
         set -euo pipefail
-        echo "$env_json" | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+        echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
 
     - name: Pre-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -37,18 +37,27 @@ jobs:
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-    - name: cargo build
-      working-directory: "${{ inputs.pipeline }}"
+    - name: dotnet restore
       run: |
         set -euo pipefail
-        cargo build --locked --release
+        pushd "${{ inputs.pipeline }}" >/dev/null
+        dotnet restore
+        popd >/dev/null
 
-    - name: cargo test
-      if: env.BUILD_TEST_SKIP != 'true'
-      working-directory: "${{ inputs.pipeline }}"
+    - name: dotnet build
       run: |
         set -euo pipefail
-        cargo test --locked --all --all-features || true
+        pushd "${{ inputs.pipeline }}" >/dev/null
+        dotnet build -c Release
+        popd >/dev/null
+
+    - name: dotnet test
+      if: env.BUILD_TEST_SKIP != 'true'
+      run: |
+        set -euo pipefail
+        pushd "${{ inputs.pipeline }}" >/dev/null
+        dotnet test -c Release --no-build || true
+        popd >/dev/null
 
     - name: Post-build hooks
       working-directory: "${{ inputs.pipeline }}"

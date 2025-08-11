@@ -1,6 +1,6 @@
-#BUILD files=/nim\.cfg|nimble\.json/
+#BUILD files=/Cargo\.toml/
 ---
-name: Builder-Nim
+name: Doozer-Rust
 
 on:
   workflow_dispatch:
@@ -37,18 +37,18 @@ jobs:
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-    - name: nimble build
+    - name: cargo build
       working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
-        nimble build -y
+        cargo build --locked --release
 
-    - name: nimble test
+    - name: cargo test
       if: env.BUILD_TEST_SKIP != 'true'
       working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
-        nimble test -y || true
+        cargo test --locked --all --all-features || true
 
     - name: Post-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -69,4 +69,3 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
-

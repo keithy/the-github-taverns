@@ -1,8 +1,8 @@
-#BUILD files=/Containerfile/
+#BUILD files=/nim\.cfg|nimble\.json/
 ---
-name: Builder-Buildah
+name: Doozer-Nim
 
-true:
+on:
   workflow_dispatch:
     inputs:
       pipeline:
@@ -29,7 +29,7 @@ jobs:
         env_json: "${{ inputs.env_json }}"
       run: |
         set -euo pipefail
-        echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
+        echo "$env_json" | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
 
     - name: Pre-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -37,16 +37,18 @@ jobs:
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-    - name: buildah bud
+    - name: nimble build
+      working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
-        PIPELINE="${{ inputs.pipeline }}"
-        IMAGE_TAG="${IMAGE_TAG:-${GITHUB_REF_NAME}}"
-        REGISTRY="${REGISTRY:-}"
-        IMAGE_PATH="${IMAGE_PATH:-$(basename "$(dirname "$PIPELINE")")/$(basename "$PIPELINE")}"
-        ref="${REGISTRY:+$REGISTRY/}${IMAGE_PATH}:$IMAGE_TAG"
-        buildah bud -t "$ref" -f "$PIPELINE/Containerfile" "$PIPELINE"
-        echo "IMAGE_REF=$ref" >> "$GITHUB_OUTPUT"
+        nimble build -y
+
+    - name: nimble test
+      if: env.BUILD_TEST_SKIP != 'true'
+      working-directory: "${{ inputs.pipeline }}"
+      run: |
+        set -euo pipefail
+        nimble test -y || true
 
     - name: Post-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -67,3 +69,4 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
+

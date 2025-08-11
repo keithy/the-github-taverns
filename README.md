@@ -15,7 +15,7 @@ Shared GitHub workflows and CI/CD configuration for the devops-cove ecosystem.
 the-github-taverns/
 ├── the-admiralty-inn/               # The harbour-master's rest (the authorities)
 │   └── harbour-master.hm.yml        # Workflow that receives incoming items
-├── the-coopers-inn/                 # Cask/keg builders retreat (the artefact makers)
+├── the-coopers-inn/                 # Cask/keg doozers retreat (the artefact makers)
 │   └── linux/                       # Tech specialist artefact makers
 ├── the-lighthouse-inn/              # Hangout for off duty watchmen
 └── the-hook-and-tackle/             # Box of tricks, scripts and hooks
@@ -34,7 +34,7 @@ Populate one of the empty harbour-templates, e.g. Polperro.
 Search the pubs for workers that you need, and copy them into the harbour’s `.github/workflows`
 
 ```bash
-# Example: adopt the docker builder and harbour-master handoff (from the-github-taverns)
+# Example: adopt the docker doozer and harbour-master handoff (from the-github-taverns)
 cd ~/devops-cove/polperro/.github
 
 # Add a watchman
@@ -43,16 +43,16 @@ cp -v  ~/devops-cove/the-github-taverns/the-lighthouse-inn/watchman-linus.hm.yml
 # Add the harbour-master
 cp -v  ~/devops-cove/the-github-taverns/the-admiralty-inn/harbour-master.hm.yml workflows
 
-# Add tech builders for your needs
-cp -v  ~/devops-cove/the-github-taverns/the-coopers-inn/linux/builder-docker.hm.yml  workflows
-cp -v  ~/devops-cove/the-github-taverns/the-coopers-inn/linux/builder-buildah.hm.yml workflows
+# Add tech doozers for your needs
+cp -v  ~/devops-cove/the-github-taverns/the-coopers-inn/linux/doozer-docker.hm.yml  workflows
+cp -v  ~/devops-cove/the-github-taverns/the-coopers-inn/linux/doozer-buildah.hm.yml workflows
 
 # Add the inspectors for your artefact types
 cp -v  ~/devops-cove/the-github-taverns/the-shelock-holmes/investigator-keg.hm.yml workflows
 ```
 
 ## Available Workflows
-- Builders: docker, buildah, compose, configure-make, maven, gradle, node, dotnet, mise
+- Doozers: docker, buildah, compose, configure-make, maven, gradle, node, dotnet, mise
 - Watchmen: the-lighthouse-inn/watchman-linus
 
 ## Customization of watchmen

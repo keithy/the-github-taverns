@@ -1,0 +1,163 @@
+---
+name: Watchman-External-Resources
+
+on:
+  push:
+    branches:
+      - main
+      - experimental**
+  pull_request:
+    branches:
+      - main
+      - release
+
+jobs:
+  watching:
+    name: Get Changed Pipelines
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: "${{ steps.spotting.outputs.matrix }}"
+
+    steps:
+
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: "${{ github.event_name == 'pull_request' && 2 || 0 }}"
+
+    - name: Calculate Cache Key
+      id: cache-key
+      run: |
+        find . -name '*.ncl' -print0 | sort -z | xargs -0 sha256sum | awk '{print $1}' | sha256sum > cache_key.txt
+        echo "cache_key=$(cat cache_key.txt)" >> $GITHUB_OUTPUT
+
+    - name: Restore Cache
+      uses: actions/cache@v3
+      id: cache
+      with:
+        path: |
+          /tmp/external-resources
+        key: ${{ steps.cache-key.outputs.cache_key }}
+        restore-keys: |
+          ${{ steps.cache-key.outputs.cache_key }}
+
+    - name: Folders changed 4 levels deep
+      id: spotting
+      env:
+        IS_PR: "${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
+      run: |
+        if $IS_PR; then
+          branch=${{ github.base_ref }}
+          start=HEAD^1
+          stop=HEAD
+        else
+          branch=${{ github.ref_name }}
+          start=${{ github.event.before }}
+          stop=${{ github.event.after }}
+        fi
+
+        changed="$(git diff --name-only -r $start $stop | sed -rn 's#^([^/]+/[^/]+/[^/]+/[^/]+)/.*#\1#p' | sort -u | xargs)"
+
+        find_var() { local name="$1"; shift 2; local def="$1"; shift 2; local f v; for f in "$@"; do v="$(sed -n "/^$name=/ { s/^$name=//; p ; q }" "$f" | xargs)"; [[ -n "$v" ]] && echo "$v" && return 0; done; echo "$def"; }
+
+        matrix=$(for PIPELINE in $changed; do
+          branch_config="$(find_var BRANCH_CONFIG default: "${branch%%/*}.branch.env")"
+          config="$(find_var CONFIG default: 'default.env' \
+                                 search: $PIPELINE/.env           $PIPELINE/config/.env \
+                                         $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
+                                         config/$branch_config)"
+          runner="$(find_var RUNNER default: 'ubuntu-24.04' \
+                                 search:  $PIPELINE/.env           $PIPELINE/config/.env \
+                                          $PIPELINE/$config        $PIPELINE/config/$config \
+                                          $PIPELINE/$branch_config $PIPELINE/config/$branch_config \
+                                          config/$branch_config)"
+          echo "{\"pipeline\": \"$PIPELINE\", \"runner\": \"$runner\", \"config\": \"$config\", \"branch\": \"$branch\" }"
+        done | jq -s .)
+
+        echo "matrix=$matrix" | tee -a $GITHUB_OUTPUT
+
+dispatch:
+  needs: watching
+  strategy:
+    matrix: "${{ fromJson(needs.watching.outputs.matrix) }}"
+  runs-on: "${{ matrix.runner }}"
+  permissions:
+    contents: read
+    id-token: write
+
+    needs: watching
+  strategy:
+
+  - name: initialize
+    env:
+      BRANCH: "${{ matrix.branch }}"
+      PIPELINE: "${{ matrix.pipeline }}"
+        - name: Fetch External Resources
+      id: fetch-resources
+      run: |
+        # TODO: Implement Nickel evaluation and resource fetching logic here.
+        # For each resource, set an environment variable RESOURCE_NAME_PATH=/path/to/resource
+        echo "Fetching external resources... (implementation pending)"
+
+  - name: Prepare payload
+    run: |
+      set -euo pipefail
+      env_json=$(awk -F= '/=/{print $1}' "$GITHUB_ENV" | jq -Rn '[inputs] as $k | reduce $k[] as $x ({}; . + {($x): env[$x]})')
+      sed -i '/^env_json=/d' "$GITHUB_ENV"
+      echo "env_json=$env_json" >> "$GITHUB_ENV"
+
+  - name: Metadata-driven dispatch
+    env:
+      GH_TOKEN: "${{ github.token }}"
+      env_json: "${{ steps.prepare.outputs.env_json }}"
+      ref: "${{ github.sha }}"
+      runner: "${{ matrix.runner }}"
+    run: |
+      set -euo pipefail
+
+      # Read build metadata headers in the harbour repo:
+      #   #BUILD files=/Dockerfile/ SOME_ENV=/pattern/
+      declare -A doozers
+      declare -A files_pat
+      declare -A kv_pairs
+      while IFS= read -r line; do
+        file="${line%%:*}"
+        meta_line="${line#*:}"
+        while read -r kv; do
+          key="${kv%%=*}"; val="${kv#*=}"
+          val="${val%/}"; val="${val#/}"
+          if [[ "$key" == "files" ]]; then
+            files_pat["$file"]="$val"
+          else
+            kv_pairs["$file,$key"]="$val"
+          fi
+        done < <(echo "$meta_line" | sed -n 's/.*#BUILD[[:space:]]\(.*\)$/\1/p' | tr ' ' '\n' | grep -E '^[A-Z0-9_\-]+=/.*(/)?$')
+        doozers["$file"]=1
+      done < <(grep -Rno '^#BUILD\b' .github/workflows/*-*.yml || true)
+
+      run_doozer() {
+        local wf="$1"; shift
+        gh workflow run "$wf" -f pipeline="$PIPELINE" -f ref="$ref" -f runner="$runner" -f env_json="$env_json"
+      }
+
+      matches=()
+      for wf in "${!doozers[@]}"; do
+        ok=1
+        fpat="${files_pat[$wf]}"
+        if [[ -n "$fpat" ]] && ! [[ "$files" =~ $fpat ]]; then ok=0; fi
+        for kv in "${!kv_pairs[@]}"; do
+          [[ "${kv%%,*}" == "$wf" ]] || continue
+          key="${kv#*,}"; want="${kv_pairs[$kv]}"
+          eval cur="\${key}"
+          if ! [[ "$cur" =~ $want ]]; then ok=0; fi
+        done
+        if [[ $ok -eq 1 ]]; then
+          matches+=("$wf")
+        fi
+      done
+      if [[ ${#matches[@]} -gt 1 ]]; then
+        echo "Error: multiple workflows match: ${matches[*]}" >&2
+        exit 1
+      fi
+      if [[ ${#matches[@]} -eq 1 ]]; then
+        run_doozer "${matches[0]}"
+      fi

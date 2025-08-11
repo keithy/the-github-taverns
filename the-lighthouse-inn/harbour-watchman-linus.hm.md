@@ -2,7 +2,7 @@
 
 This *watchman-workflow* `watchman-linus` oversees pipelines running on linux runners.
 
-## watchman/builder/inspector workflow pattern
+## watchman/doozer/inspector workflow pattern
 
 The code repository defines build instructions for multiple project pipelines.
 Build instructions themselves may be varied, such as `configure/make`, `mvn deploy`,
@@ -12,7 +12,7 @@ When code is updated via `push` or `pull-request` this *watchman-workflow* selec
 *build-pipeline* folders, that have changed and generates a matrix of jobs building
 each one individually.
 
-When each *build-pipeline* job has completed, the *builder-workflow* hands off to an *inspector-workflow*.
+When each *build-pipeline* job has completed, the *doozer-workflow* hands off to an *inspector-workflow*.
 The *inspector-workflow* is selected according to the type of item generated. The inspector
 workflows are also provided by the *harbour-master*.
 

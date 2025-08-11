@@ -1,6 +1,6 @@
-#BUILD files=/(requirements\.txt|pyproject\.toml|setup\.py)/
+#BUILD files=/composer\.json/
 ---
-name: Builder-Python
+name: Doozer-PHP
 
 on:
   workflow_dispatch:
@@ -24,12 +24,20 @@ jobs:
       with:
         ref: "${{ inputs.ref }}"
 
-    - name: Import env
-      env:
-        env_json: "${{ inputs.env_json }}"
+    - name: Set env name tech
       run: |
-        set -euo pipefail
-        echo "$env_json" | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+        echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+        doozer_name="${GITHUB_WORKFLOW%.hm.yml}"
+        {
+          echo "BUILDER=$doozer_name"
+          echo "TECH=${doozer_name#*-}"
+        } >> "$GITHUB_ENV"
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: "${{ env.PHP_VERSION || '8.2' }}"
+        tools: composer
 
     - name: Pre-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -37,24 +45,26 @@ jobs:
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "${{ env.PYTHON_VERSION || '3.12' }}"
+    - name: Select composer binary
+      run: echo "COMPOSER_BIN=beethoven.sh" >> "$GITHUB_ENV"
+      if: contains(env.files, 'beethoven.sh')
 
-    - name: Install dependencies
+    - name: composer install
+      env:
+        COMPOSER_BIN: "${{ env.COMPOSER_BIN || 'composer' }}"
       working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
-        if [[ -f requirements.txt ]]; then pip install -r requirements.txt; fi
-        if [[ -f pyproject.toml ]]; then pip install -e .; fi
+        "$COMPOSER_BIN" install --no-interaction --no-progress
 
-    - name: Run tests (pytest)
+    - name: composer test
       if: env.BUILD_TEST_SKIP != 'true'
+      env:
+        COMPOSER_BIN: "${{ env.COMPOSER_BIN || 'composer' }}"
       working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
-        if command -v pytest >/dev/null 2>&1; then pytest -q || true; else echo "pytest not installed, skipping"; fi
+        "$COMPOSER_BIN" test || true
 
     - name: Post-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -75,4 +85,3 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
-

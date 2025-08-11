@@ -1,6 +1,6 @@
-#BUILD files=/(\.csproj|global\.json|NuGet\.config)/
+#BUILD files=/go\.mod/
 ---
-name: Builder-DotNet
+name: Doozer-Go
 
 on:
   workflow_dispatch:
@@ -24,12 +24,19 @@ jobs:
       with:
         ref: "${{ inputs.ref }}"
 
-    - name: Import env
-      env:
-        env_json: "${{ inputs.env_json }}"
+    - name: Set env name tech
       run: |
-        set -euo pipefail
-        echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
+        echo '${{ inputs.env }}' | jq -r 'to_entries[]|"\(.key)=\(.value)"' >> "$GITHUB_ENV"
+        doozer_name="${GITHUB_WORKFLOW%.hm.yml}"
+        {
+          echo "BUILDER=$doozer_name"
+          echo "TECH=${doozer_name#*-}"
+        } >> "$GITHUB_ENV"
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: "${{ inputs.pipeline }}/go.mod"
 
     - name: Pre-build hooks
       working-directory: "${{ inputs.pipeline }}"
@@ -37,27 +44,16 @@ jobs:
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
 
-    - name: dotnet restore
+    - name: go build
       run: |
         set -euo pipefail
-        pushd "${{ inputs.pipeline }}" >/dev/null
-        dotnet restore
-        popd >/dev/null
+        go -C "${{ inputs.pipeline }}" build ./...
 
-    - name: dotnet build
-      run: |
-        set -euo pipefail
-        pushd "${{ inputs.pipeline }}" >/dev/null
-        dotnet build -c Release
-        popd >/dev/null
-
-    - name: dotnet test
+    - name: go test
       if: env.BUILD_TEST_SKIP != 'true'
       run: |
         set -euo pipefail
-        pushd "${{ inputs.pipeline }}" >/dev/null
-        dotnet test -c Release --no-build || true
-        popd >/dev/null
+        go -C "${{ inputs.pipeline }}" test ./... -v
 
     - name: Post-build hooks
       working-directory: "${{ inputs.pipeline }}"

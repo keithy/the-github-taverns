@@ -1,8 +1,7 @@
-#BUILD files=/pom\.xml/
----
-name: Builder-Maven
 
-true:
+name: Doozer-Compose
+
+on:
   workflow_dispatch:
     inputs:
       pipeline:
@@ -32,32 +31,21 @@ jobs:
         echo "$env_json" | jq -r ''to_entries[]|"\(.key)=\(.value)"'' >> "$GITHUB_ENV"
 
     - name: Pre-build hooks
-      working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
         find "$HARBOUR"/hooks/10-pre-build.d hooks/10-pre-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+      working-directory: "${{ inputs.pipeline }}"
 
-    - name: mvn validate
+    - name: docker compose build
       run: |
         set -euo pipefail
-        mvn -f "${{ inputs.pipeline }}/pom.xml" -B -U -ntp -q validate
-
-    - name: mvn package
-      run: |
-        set -euo pipefail
-        mvn -f "${{ inputs.pipeline }}/pom.xml" -B -U -ntp package
-
-    - name: mvn test
-      if: env.BUILD_TEST_SKIP != 'true'
-      run: |
-        set -euo pipefail
-        mvn -f "${{ inputs.pipeline }}/pom.xml" -B -U -ntp -DskipTests=false test
+        docker compose -f "${{ inputs.pipeline }}/docker-compose.yml" build
 
     - name: Post-build hooks
-      working-directory: "${{ inputs.pipeline }}"
       run: |
         set -euo pipefail
         find "$HARBOUR"/hooks/20-post-build.d hooks/20-post-build.d -type f -perm -u+x -execdir sh -c '"$0"' {} \; 2>/dev/null || true
+      working-directory: "${{ inputs.pipeline }}"
 
     - name: Prepare payload
       run: |
@@ -72,3 +60,4 @@ jobs:
         pipeline: "${{ inputs.pipeline }}"
         ref: "${{ inputs.ref }}"
         env_json: "${{ env.env_json }}"
+
