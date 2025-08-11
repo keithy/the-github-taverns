@@ -9,7 +9,6 @@
 set -euo pipefail
 
 # Find all projects with external resource definitions.
-echo "Finding external resource definitions..."
 NICKEL_FILES=$(find . -name "*.ncl")
 
 # Combine the configurations into a single config.
@@ -26,9 +25,9 @@ RESOURCES=$(mise run nickel eval $COMBINED_CONFIG | jq .)
 
 # Read cache
 CACHE_KEY=$(sha256sum $COMBINED_CONFIG | awk '{print $1}')
-CACHE_PATH="/tmp/lighthouse-keeper-cache"
+CACHE_PATH="/tmp/lighthouse-cache"
 
-mkdir -p "$(dirname "$CACHE_PATH")"
+mkdir -p "$(dirname \"$CACHE_PATH\")"
 
 if [[ -f "$CACHE_PATH" ]]; then
   echo "Cache file exists, reading..."
@@ -55,7 +54,7 @@ NEW_RESOURCES=$(echo $RESOURCES | jq -c '.[]' | \
   RESOURCE_ORG=$(echo "$RESOURCE" | jq -r .org)
   RESOURCE_REPO=$(echo "$RESOURCE" | jq -r .repo)
   RESOURCE_REF=$(echo "$RESOURCE" | jq -r .ref)
-  OLD_RESOURCE_SHA=$(echo "$OLD_RESOURCES" | jq -r --arg name "$RESOURCE_NAME" '.[$name]')
+  OLD_RESOURCE_SHA=$(echo "$OLD_RESOURCES" | jq -r --arg name "$RESOURCE_NAME" '.[$name]' 2>/dev/null)
 
     if [ "$RESOURCE_TYPE" == "github" ]; then
         echo "This is a github repo"

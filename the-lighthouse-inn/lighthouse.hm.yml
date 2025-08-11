@@ -1,47 +1,49 @@
 ### Schedule
-# This workflow is schedules the lighthouse keeper to be run every 20 min
+# This workflow schedules the lighthouse to scan the horizon for changes
+# Run every 20 minutes
+
 on:
   schedule:
     # Run every 20 minutes
     - cron: '*/20 * * * *'
 
 jobs:
-  run-lighthouse-keeper:
+  run-lighthouse:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up cache for mise
-        id: cache-mise
-        uses: actions/cache@v3
-        with:
-          path: ~/.local/share/mise
-          key: ${{ runner.os }}-mise
-          restore-keys:
-            ${{ runner.os }}-mise-
-
-      - name: Install mise
-        if: steps.cache-mise.outputs.cache-hit != 'true'
-        run: curl -fsSL https://mise.jdx.gg/install.sh | sh && echo "$HOME/.local/share/mise/bin" >> $GITHUB_PATH
-        shell: bash
-
-
-      - name: Set up cache for nickel
-        id: cache-nickel
-        uses: actions/cache@v3
-        with:
-          path: ~/.local/share/mise/bin/nickel
-          key: ${{ runner.os }}-nickel
-          restore-keys:
-            ${{ runner.os }}-nickel-
-      - name: install nickel
-        if: steps.cache-nickel.outputs.cache-hit != 'true'
-        run: | 
-          mise tools install
-          mise tools use -g
-
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Run Lighthouse Keeper
+      - name: Generic install and tool setup + caching
+        id: install-and-cache-tools
+        shell: bash
+        run: |
+          # set -x # for debugging
+
+          # Determine cache key and path
+          MISE_CACHE_KEY=$(echo "$(cat mise.toml)" | sha256sum | awk '{print $1}')
+          MISE_CACHE_PATH="$HOME/.local/share/mise"
+          echo "MISE_CACHE_KEY: $MISE_CACHE_KEY"
+          echo "MISE_CACHE_PATH: $MISE_CACHE_PATH"
+
+          # Restore cache, or install if no cache hit
+          echo "Restoring mise cache..."
+          if  [[ -n "${{ github.actions.cache.restoreByKey(key: MISE_CACHE_KEY, path: MISE_CACHE_PATH) }}" ]]; then
+            echo "Cache restored."
+          else
+            echo "Cache not found, installing mise..."
+            curl -fsSL https://mise.jdx.gg/install.sh | sh
+          fi
+              
+          #check out the latest source
+          git pull origin
+          # Add mise to path, and install tools
+          echo "$HOME/.local/share/mise/bin" >> $GITHUB_PATH
+          mise --version
+          mise tools install -y
+          mise tools use -g
+        
+      - name: Run Lighthouse
         run: |
           cd /home/keith/devops-cove/the-github-taverns/the-lighthouse-inn/
           ./lighthouse.sh
