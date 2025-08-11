@@ -80,4 +80,4 @@ if [ "$Sha_changed" = "true" ]; then
 elseecho "No external resources have changed."
 fi
 
-echo "Lighthouse keeper complete."
+echo "Lighthouse complete."
