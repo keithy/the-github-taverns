@@ -1,0 +1,18 @@
+### Schedule
+This workflow is schedules the lighthouse keeper to be run every 20 min
+on:
+  schedule:
+    # Run every 20 minutes
+    - cron: '*/20 * * * *'
+
+jobs:
+  run-lighthouse-keeper:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Run Lighthouse Keeper
+        run: |
+          cd /home/keith/devops-cove/the-github-taverns/the-lighthouse-inn/
+          ./lighthouse-keeper.sh
