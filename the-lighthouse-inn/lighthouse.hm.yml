@@ -11,15 +11,13 @@ jobs:
   run-lighthouse:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
       - name: Generic install and tool setup + caching
         id: install-and-cache-tools
         shell: bash
         run: |
           # set -x # for debugging
-
+          #check out the latest source
+          git pull origin
           # Determine cache key and path
           MISE_CACHE_KEY=$(echo "$(cat mise.toml)" | sha256sum | awk '{print $1}')
           MISE_CACHE_PATH="$HOME/.local/share/mise"
@@ -35,14 +33,12 @@ jobs:
             curl -fsSL https://mise.jdx.gg/install.sh | sh
           fi
               
-          #check out the latest source
-          git pull origin
           # Add mise to path, and install tools
           echo "$HOME/.local/share/mise/bin" >> $GITHUB_PATH
           mise --version
           mise tools install -y
           mise tools use -g
-        
+  
       - name: Run Lighthouse
         run: |
           cd /home/keith/devops-cove/the-github-taverns/the-lighthouse-inn/
