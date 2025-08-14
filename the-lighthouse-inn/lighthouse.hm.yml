@@ -1,3 +1,5 @@
+#!/bin/bash
+
 ### Schedule
 # This workflow schedules the lighthouse to scan the horizon for changes
 # Run every 20 minutes
@@ -14,7 +16,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Run Lighthouse
+      - name: Run test Lighthouse
+        shell: bash
         run: |
-          cd /home/keith/devops-cove/the-github-taverns/the-lighthouse-inn/
-          ./lighthouse.sh
+          cd /home/keith/devops-cove/the-github-taverns/the-lighthouse-inn
+          chmod +x ./test-lighthouse.sh
+          ./test-lighthouse.sh
+
